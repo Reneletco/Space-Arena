@@ -1,24 +1,52 @@
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
+import { useCamera } from '../hooks/useCamera';
+import { CameraView } from './camera/CameraView';
+import "./CameraScreen.css";
 
 export default function CameraScreen() {
   const navigate = useNavigate();
   const setImage = useGameStore((state) => state.setImage);
 
+  const {
+    videoRef,
+    canvasRef,
+    error,
+    isCameraReady,
+    capture,
+  } = useCamera();
+
   const handleCapture = () => {
-    setImage('data:image/png;base64,...');
-    navigate('/recognition');
+    const photo = capture();
+    if (photo) {
+      setImage(photo);
+      navigate('/recognition');
+    }
   };
 
+
   return (
-    <div style={{ padding: 20, textAlign: 'center' }}>
-      <h1>Space Arena</h1>
-      <div style={{ background: '#333', width: '100%', height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-        [Видоискатель камеры]
+    <div className="app-container">
+      <h1 className="app-title">Space Arena</h1>
+      
+      <div className="camera-area">
+        <div className="camera-placeholder">
+          <CameraView
+            videoRef={videoRef}
+            canvasRef={canvasRef}
+            error={error}
+            isCameraReady={isCameraReady}
+          />
+        </div>
+
+        <button 
+          className="capture-btn" 
+          onClick={handleCapture}
+          disabled={!isCameraReady}
+        >
+          Сделать фото
+        </button>
       </div>
-      <button onClick={handleCapture} style={{ marginTop: 20, padding: '10px 30px', fontSize: 18 }}>
-        Сделать фото
-      </button>
     </div>
   );
 }
