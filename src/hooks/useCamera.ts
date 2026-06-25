@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 
-const ACCESS_CAMERA_ERROR: string = "Не удалось получить доступ к камере.ю Проверьте разрешение"
+const ACCESS_CAMERA_ERROR: string = "Не удалось получить доступ к камере. Проверьте разрешение"
 
 export interface UseCameraReturn {
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   error: string | null;
   capturedPhoto: string | null;
   isCameraReady: boolean;
@@ -25,7 +26,7 @@ export const useCamera = (): UseCameraReturn => {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'enviroment',
+          facingMode: 'environment',
         },
       });
 
@@ -87,6 +88,7 @@ export const useCamera = (): UseCameraReturn => {
 
   return {
     videoRef,
+    canvasRef,
     error,
     capturedPhoto,
     isCameraReady,
