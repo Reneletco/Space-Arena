@@ -1,0 +1,72 @@
+/* TODO: добавить ограничения по экрану */
+
+.app-container {
+  padding: 20px;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: #f0f0f0;
+}
+
+.app-title {
+  margin: 0;
+  margin-bottom: 10px;
+  text-align: center;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.camera-area {
+  background: #000;
+  flex: 1;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: #333;
+  font-size: 18px;
+}
+
+.capture-btn {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 32px;
+  font-size: 18px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  transition: all 0.2s;
+}
+
+.capture-btn:hover {
+  background: #0056b3;
+  transform: translateX(-50%) scale(1.05);
+}
+
+.capture-btn:active {
+  transform: translateX(-50%) scale(0.95);
+}
+
+.capture-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
