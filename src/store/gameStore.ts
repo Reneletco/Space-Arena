@@ -1,42 +1,74 @@
 import { create } from 'zustand';
+import type { DetectedShip } from '../types/ships';
+import type { BattleShip, ShotEvent } from '../types/battle';
+import { simulateBattle } from '../battle/engine';
 
 interface GameState {
-  rawImage: string | null;
-  ships: any[];
-  shots: any[];
-  currentShotIndex: number;
-  winner: string | null;
-  isBattleFinished: boolean;
+  rawImage:         string | null;
+  detectedShips:    DetectedShip[];
 
-  setImage: (image: string) => void;
-  setShips: (ships: any[]) => void;
-  startBattle: () => void;
-  nextShot: () => any;
-  reset: () => void;
+  // Battle runtime
+  battleShips:      BattleShip[];
+  events:           ShotEvent[];
+  currentEventIdx:  number;
+  winner:           string | null;
+  isBattleReady:    boolean;
+
+  // Actions
+  setImage:         (image: string) => void;
+  setShips:         (ships: DetectedShip[]) => void;
+  startBattle:      () => void;
+  nextEvent:        () => void;
+  prevEvent:        () => void;
+  reset:            () => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
-  rawImage: null,
-  ships: [],
-  shots: [],
-  currentShotIndex: 0,
-  winner: null,
-  isBattleFinished: false,
+  rawImage:        null,
+  detectedShips:   [],
+  battleShips:     [],
+  events:          [],
+  currentEventIdx: -1,  // -1 = фаза инициативы (до первого выстрела)
+  winner:          null,
+  isBattleReady:   false,
 
-  setImage: (image) => set({ rawImage: image }),
-  setShips: (ships) => set({ ships }),
+  setImage:  image  => set({ rawImage: image }),
+  setShips:  ships  => set({ detectedShips: ships }),
+
   startBattle: () => {
-    set({ isBattleFinished: false, currentShotIndex: 0, shots: [] });
+    const { detectedShips } = get();
+    if (!detectedShips.length) return;
+    const { ships, events, winner } = simulateBattle(detectedShips);
+    set({
+      battleShips:     ships,
+      events,
+      winner,
+      currentEventIdx: -1,
+      isBattleReady:   true,
+    });
   },
-  nextShot: () => {
-    return null;
+
+  nextEvent: () => {
+    const { currentEventIdx, events } = get();
+    if (currentEventIdx < events.length - 1) {
+      set({ currentEventIdx: currentEventIdx + 1 });
+    }
   },
+
+  prevEvent: () => {
+    const { currentEventIdx } = get();
+    if (currentEventIdx > -1) {
+      set({ currentEventIdx: currentEventIdx - 1 });
+    }
+  },
+
   reset: () => set({
-    rawImage: null,
-    ships: [],
-    shots: [],
-    currentShotIndex: 0,
-    winner: null,
-    isBattleFinished: false,
+    rawImage:        null,
+    detectedShips:   [],
+    battleShips:     [],
+    events:          [],
+    currentEventIdx: -1,
+    winner:          null,
+    isBattleReady:   false,
   }),
 }));
