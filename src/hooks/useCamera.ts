@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
 const ACCESS_CAMERA_ERROR = 'Не удалось получить доступ к камере. Проверьте разрешение';
 
@@ -16,15 +16,15 @@ export interface UseCameraReturn {
 export const useCamera = (): UseCameraReturn => {
   const videoRef  = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'));
-  const [error,          setError]          = useState<string | null>(null);
-  const [capturedPhoto,  setCapturedPhoto]  = useState<string | null>(null);
-  const [isCameraReady,  setIsCameraReady]  = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   const startCamera = useCallback(async () => {
     try {
       setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }, // fixed typo from original
+        video: { facingMode: 'environment' },
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -62,10 +62,6 @@ export const useCamera = (): UseCameraReturn => {
 
   const clearPhoto = useCallback(() => setCapturedPhoto(null), []);
 
-  useEffect(() => {
-    startCamera();
-    return () => stopCamera();
-  }, [startCamera, stopCamera]);
-
+  // Камера НЕ запускается автоматически — только через startCamera()
   return { videoRef, error, capturedPhoto, isCameraReady, startCamera, stopCamera, capture, clearPhoto };
 };
