@@ -9,7 +9,7 @@
 
 import type { DetectedShip } from '../types/ships';
 import { SHIP_STATS } from '../types/ships';
-import type { BattleShip } from '../types/battle';
+import type { BattleShip, ShotResult } from '../types/battle';
 
 // ─── Хелперы ──────────────────────────────────────────────────────────────────
 
@@ -113,4 +113,33 @@ export function findTarget(shooter: BattleShip, ships: BattleShip[]): BattleShip
   }
 
   return best;
+}
+
+// ─── Щиты и урон ──────────────────────────────────────────────────────────────
+
+export interface ResolvedShot {
+  result: ShotResult;
+  /** Какой щит заблокировал выстрел (если result === 'blocked') */
+  shieldSide?: 'front' | 'rear' | 'left' | 'right';
+}
+
+/**
+ * Применяет выстрел шутера по цели: определяет сторону попадания,
+ * блокирует щитом (с отключением щита) либо наносит 1 урон.
+ * При HP <= 0 корабль помечается уничтоженным. Мутирует target.
+ */
+export function resolveShot(shooter: BattleShip, target: BattleShip): ResolvedShot {
+  const side = hitSide(shooter.angle, target.angle);
+
+  if (target.shields[side]) {
+    target.shields[side] = false;
+    return { result: 'blocked', shieldSide: side };
+  }
+
+  target.hp -= 1;
+  if (target.hp <= 0) {
+    target.hp = 0;
+    target.alive = false;
+  }
+  return { result: 'hit' };
 }
