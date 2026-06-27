@@ -72,3 +72,45 @@ export function buildBattleShips(detected: DetectedShip[]): BattleShip[] {
 export function getFiringOrder(ships: BattleShip[]): BattleShip[] {
   return [...ships].sort((a, b) => b.initiative - a.initiative);
 }
+
+// ─── Линия огня ───────────────────────────────────────────────────────────────
+
+/** Радиус попадания в нормализованных координатах (0..1 от размеров фото) */
+const HIT_RADIUS = 0.06;
+
+/**
+ * Находит ближайший живой корабль на линии огня стрелка
+ * (луч из носа стрелка в направлении его угла, до бесконечности).
+ * Возвращает null, если на линии огня никого нет — это промах.
+ */
+export function findTarget(shooter: BattleShip, ships: BattleShip[]): BattleShip | null {
+  const rad = (shooter.angle * Math.PI) / 180;
+  const dx  = Math.cos(rad);
+  const dy  = Math.sin(rad);
+
+  let best: BattleShip | null = null;
+  let bestDist = Infinity;
+
+  for (const ship of ships) {
+    if (!ship.alive || ship.id === shooter.id) continue;
+
+    // Вектор от стрелка до потенциальной цели
+    const ex = ship.x - shooter.x;
+    const ey = ship.y - shooter.y;
+
+    // Проекция на направление луча: если <= 0, цель позади стрелка
+    const proj = ex * dx + ey * dy;
+    if (proj <= 0) continue;
+
+    // Перпендикулярное расстояние цели от линии луча
+    const perp = Math.abs(ex * dy - ey * dx);
+    if (perp > HIT_RADIUS) continue;
+
+    if (proj < bestDist) {
+      bestDist = proj;
+      best = ship;
+    }
+  }
+
+  return best;
+}
