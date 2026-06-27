@@ -17,6 +17,78 @@ const RESULT_ICON: Record<string, string> = {
   hit: '💥', blocked: '🛡️', miss: '〰️',
 };
 
+// ─── Силуэты корпусов кораблей ─────────────────────────────────────────────────
+
+/**
+ * Строит путь корпуса корабля в локальных координатах (нос направлен вдоль +X).
+ * Каждый тип корабля имеет свой характерный силуэт.
+ */
+function shipHullPath(ctx: CanvasRenderingContext2D, type: string, R: number) {
+  ctx.beginPath();
+  switch (type) {
+    case 'destroyer':
+      // Вытянутый корпус с боковыми пилонами
+      ctx.moveTo(R * 1.1, 0);
+      ctx.lineTo(R * 0.25, R * 0.5);
+      ctx.lineTo(-R * 0.45, R * 0.95);
+      ctx.lineTo(-R * 0.85, R * 0.35);
+      ctx.lineTo(-R * 0.65, 0);
+      ctx.lineTo(-R * 0.85, -R * 0.35);
+      ctx.lineTo(-R * 0.45, -R * 0.95);
+      ctx.lineTo(R * 0.25, -R * 0.5);
+      ctx.closePath();
+      break;
+    case 'interceptor':
+      // Узкий быстрый дельтаплан
+      ctx.moveTo(R * 1.35, 0);
+      ctx.lineTo(-R * 0.25, R * 0.32);
+      ctx.lineTo(-R * 0.05, 0);
+      ctx.lineTo(-R * 0.25, -R * 0.32);
+      ctx.closePath();
+      break;
+    case 'cruiser':
+      // Массивный шестиугольный корпус с широкими бортами
+      ctx.moveTo(R * 0.95, 0);
+      ctx.lineTo(R * 0.45, R * 0.6);
+      ctx.lineTo(-R * 0.35, R * 0.85);
+      ctx.lineTo(-R * 1.0, R * 0.5);
+      ctx.lineTo(-R * 1.0, -R * 0.5);
+      ctx.lineTo(-R * 0.35, -R * 0.85);
+      ctx.lineTo(R * 0.45, -R * 0.6);
+      ctx.closePath();
+      break;
+    case 'scout':
+    default:
+      // Маленький лёгкий клин с тонкими крыльями
+      ctx.moveTo(R * 1.25, 0);
+      ctx.lineTo(-R * 0.45, R * 0.5);
+      ctx.lineTo(-R * 0.15, 0);
+      ctx.lineTo(-R * 0.45, -R * 0.5);
+      ctx.closePath();
+      break;
+  }
+}
+
+/** Рисует деталь — кокпит у носа и двигатели у кормы — для всех типов кораблей. */
+function drawShipDetails(ctx: CanvasRenderingContext2D, type: string, R: number, color: string) {
+  // Кокпит
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.ellipse(R * 0.35, 0, R * 0.16, R * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Двигатели (1 для интерсептора/разведчика, 2 для разрушителя/крейсера)
+  const engineY = type === 'interceptor' || type === 'scout' ? [0] : [R * 0.32, -R * 0.32];
+  const rearX   = type === 'cruiser' ? -R * 0.95 : -R * 0.7;
+  for (const ey of engineY) {
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.9;
+    ctx.ellipse(rearX, ey, R * 0.14, R * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 // ─── Canvas renderer ──────────────────────────────────────────────────────────
 
 function drawArena(
@@ -134,22 +206,30 @@ function drawArena(
       ctx.shadowColor = color;
     }
 
-    // Тело корабля
-    ctx.fillStyle   = ship.alive ? color : '#333';
-    ctx.strokeStyle = ship.alive ? '#fff' : '#555';
-    ctx.lineWidth   = isShooter ? 2.5 : 1.5;
-    ctx.globalAlpha = ship.alive ? 1 : 0.35;
-
-    // Треугольник — нос корабля
+    // Корпус корабля — свой силуэт под каждый тип, с объёмным градиентом
     const rad = (ship.angle * Math.PI) / 180;
     ctx.rotate(rad);
-    ctx.beginPath();
-    ctx.moveTo( R,      0);       // нос
-    ctx.lineTo(-R * 0.6,  R * 0.65);
-    ctx.lineTo(-R * 0.6, -R * 0.65);
-    ctx.closePath();
+    ctx.globalAlpha = ship.alive ? 1 : 0.35;
+
+    const hullGradient = ctx.createLinearGradient(-R, 0, R, 0);
+    if (ship.alive) {
+      hullGradient.addColorStop(0, '#0a0a14');
+      hullGradient.addColorStop(0.55, color);
+      hullGradient.addColorStop(1, '#ffffff');
+    } else {
+      hullGradient.addColorStop(0, '#1a1a1a');
+      hullGradient.addColorStop(1, '#3a3a3a');
+    }
+
+    shipHullPath(ctx, ship.type, R);
+    ctx.fillStyle   = hullGradient;
+    ctx.strokeStyle = ship.alive ? '#fff' : '#555';
+    ctx.lineWidth   = isShooter ? 2.5 : 1.5;
     ctx.fill();
     ctx.stroke();
+
+    if (ship.alive) drawShipDetails(ctx, ship.type, R, color);
+
     ctx.restore();
 
     // HP бар
