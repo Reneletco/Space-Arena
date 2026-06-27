@@ -404,8 +404,11 @@ export default function ArenaScreen() {
       {/* Текущее событие */}
       {ev && (
         <div style={{ ...s.eventBox, borderColor: shooter ? COLOR_HEX[shooter.color] : '#334' }}>
-          <span style={s.eventIcon}>{RESULT_ICON[ev.result]}</span>
-          <span style={s.eventText}>{eventText}</span>
+          <span style={s.eventIcon}>{RESULT_ICON[ev.result](ev.result)}</span>
+          <span style={s.eventText}>
+            {eventText}
+            {isDestroyed && <SkullIcon className="icon-pop" />}
+          </span>
           <span style={s.eventStep}>Ход {currentEventIdx + 1} / {events.length}</span>
         </div>
       )}
@@ -414,12 +417,16 @@ export default function ArenaScreen() {
       {isLast && isBattleReady && (
         <div style={s.winnerBox}>
           {winner
-            ? <p style={{ color: COLOR_HEX[winner] }}>🏆 Победитель: {COLOR_RU[winner]}!</p>
-            : <p style={{ color: '#aaa' }}>🤝 Ничья!</p>
+            ? <p style={{ color: COLOR_HEX[winner], display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                <TrophyIcon className="icon-pop" /> Победитель: {COLOR_RU[winner]}!
+              </p>
+            : <p style={{ color: '#aaa', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                <HandshakeIcon className="icon-pop" /> Ничья!
+              </p>
           }
-          <button style={{ ...s.btn, background: '#334', marginTop: 8 }}
+          <button style={{ ...s.btn, background: '#334', marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={() => { useGameStore.getState().reset(); navigate('/'); }}>
-            🔄 Новый раунд
+            <RestartIcon /> Новый раунд
           </button>
         </div>
       )}
@@ -438,7 +445,7 @@ export default function ArenaScreen() {
               <span style={{ color: COLOR_HEX[ship.color] }}>■</span>
               &nbsp;{COLOR_RU[ship.color]} {ship.label}
               <span style={s.hpText}> HP {hp}/{ship.maxHp}</span>
-              {!alive && <span style={{ color: '#ff4444' }}> 💀</span>}
+              {!alive && <SkullIcon size={14} className="icon-pop" />}
             </div>
           );
         })}
@@ -455,7 +462,10 @@ const s: Record<string, React.CSSProperties> = {
     padding: '12px 16px', minHeight: '100dvh', boxSizing: 'border-box',
     background: '#0d0d1a', color: '#fff',
   },
-  title: { margin: '0 0 10px', fontSize: 22, letterSpacing: 1 },
+  title: {
+    margin: '0 0 10px', fontSize: 22, letterSpacing: 1,
+    display: 'flex', alignItems: 'center', gap: 8,
+  },
   canvas: {
     width: '100%', maxWidth: 480, borderRadius: 12,
     border: '2px solid #223', display: 'block',
@@ -465,7 +475,10 @@ const s: Record<string, React.CSSProperties> = {
     background: '#12122a', borderRadius: 10, padding: '10px 14px',
     border: '1px solid #334',
   },
-  initTitle: { margin: '0 0 6px', fontWeight: 700, color: '#aaa', fontSize: 13 },
+  initTitle: {
+    margin: '0 0 6px', fontWeight: 700, color: '#aaa', fontSize: 13,
+    display: 'flex', alignItems: 'center', gap: 6,
+  },
   initRow: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '3px 0', fontSize: 14,
@@ -477,8 +490,8 @@ const s: Record<string, React.CSSProperties> = {
     padding: '10px 14px', border: '2px solid',
     display: 'flex', alignItems: 'center', gap: 8,
   },
-  eventIcon: { fontSize: 22, flexShrink: 0 },
-  eventText: { flex: 1, fontSize: 14, lineHeight: '1.4' },
+  eventIcon: { flexShrink: 0, display: 'flex' },
+  eventText: { flex: 1, fontSize: 14, lineHeight: '1.4', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   eventStep: { color: '#556', fontSize: 12, flexShrink: 0 },
   winnerBox: {
     marginTop: 10, textAlign: 'center', fontSize: 20, fontWeight: 700,
@@ -499,6 +512,7 @@ const s: Record<string, React.CSSProperties> = {
   shipChip: {
     padding: '5px 11px', borderRadius: 8, border: '2px solid',
     fontSize: 13, background: '#15152a', transition: 'opacity .3s',
+    display: 'inline-flex', alignItems: 'center', gap: 4,
   },
   hpText: { color: '#aaa', fontSize: 12 },
 };
