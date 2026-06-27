@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
-import type { DetectedShip } from '../types/ships';
+import type { DetectedShip, ShipColor, ShipType } from '../types/ships';
 import { SHIP_STATS } from '../types/ships';
-import { SwordsIcon, ChevronLeftIcon } from './icons';
+import { SwordsIcon, ChevronLeftIcon, PlusIcon, TrashIcon } from './icons';
 
 const COLOR_HEX: Record<string, string> = {
   red: '#ff4444', blue: '#3399ff', green: '#33dd55', yellow: '#ffdd00',
 };
+
+const ALL_COLORS: ShipColor[] = ['red', 'blue', 'green', 'yellow'];
+const ALL_TYPES:  ShipType[]  = ['destroyer', 'interceptor', 'cruiser', 'scout'];
+let nextShipSeq = 1;
 
 type DragMode = 'move' | 'rotate';
 interface DragState { id: string; mode: DragMode; offsetX: number; offsetY: number }
@@ -85,6 +89,9 @@ export default function EditScreen() {
   const [ships, setLocalShips]   = useState<DetectedShip[]>(detected);
   const [selectedId, setSelected] = useState<string | null>(null);
   const [imgReady, setImgReady]  = useState(false);
+  const [addOpen, setAddOpen]     = useState(false);
+  const [newType, setNewType]     = useState<ShipType>('destroyer');
+  const [newColor, setNewColor]   = useState<ShipColor>('red');
 
   // Загружаем фото один раз
   useEffect(() => {
@@ -180,6 +187,30 @@ export default function EditScreen() {
     navigate('/arena');
   };
 
+  const handleAddShip = () => {
+    const img = imgRef.current;
+    const W = img?.naturalWidth  ?? 800;
+    const H = img?.naturalHeight ?? 600;
+    const size = Math.min(W, H) * 0.15;
+    const cx = W / 2;
+    const cy = H / 2;
+    const id = `new-${nextShipSeq++}`;
+
+    const ship: DetectedShip = {
+      id, color: newColor, type: newType,
+      cx, cy, angle: 0,
+      bbox: { x: cx - size / 2, y: cy - size / 2, w: size, h: size },
+    };
+    setLocalShips(prev => [...prev, ship]);
+    setSelected(id);
+    setAddOpen(false);
+  };
+
+  const handleRemoveShip = (id: string) => {
+    setLocalShips(prev => prev.filter(sh => sh.id !== id));
+    if (selectedId === id) setSelected(null);
+  };
+
   return (
     <div style={s.root}>
       <h2 style={s.title}>Расстановка кораблей</h2>
@@ -208,9 +239,54 @@ export default function EditScreen() {
             <span style={{ color: COLOR_HEX[ship.color], fontWeight: 700 }}>■</span>
             &nbsp;{SHIP_STATS[ship.type].label}
             <span style={s.chipSub}>&nbsp;·&nbsp;{ship.color}&nbsp;·&nbsp;{Math.round(ship.angle)}°</span>
+            <button
+              style={s.chipDelete}
+              onClick={e => { e.stopPropagation(); handleRemoveShip(ship.id); }}
+              title="Удалить корабль"
+            >
+              <TrashIcon size={14} />
+            </button>
           </div>
         ))}
+
+        <button style={s.addChip} onClick={() => setAddOpen(v => !v)}>
+          <PlusIcon size={16} /> Добавить корабль
+        </button>
       </div>
+
+      {addOpen && (
+        <div style={s.addPanel}>
+          <div style={s.addRow}>
+            <span style={s.addLabel}>Тип:</span>
+            {ALL_TYPES.map(t => (
+              <button
+                key={t}
+                style={{ ...s.pill, ...(newType === t ? s.pillActive : {}) }}
+                onClick={() => setNewType(t)}
+              >
+                {SHIP_STATS[t].label}
+              </button>
+            ))}
+          </div>
+          <div style={s.addRow}>
+            <span style={s.addLabel}>Цвет:</span>
+            {ALL_COLORS.map(c => (
+              <button
+                key={c}
+                style={{
+                  ...s.colorDot, background: COLOR_HEX[c],
+                  outline: newColor === c ? '2px solid #fff' : 'none',
+                }}
+                onClick={() => setNewColor(c)}
+                title={c}
+              />
+            ))}
+          </div>
+          <button style={{ ...s.btn, background: 'linear-gradient(135deg,#6644ff,#aa44ff)', marginTop: 4 }} onClick={handleAddShip}>
+            <PlusIcon size={16} /> Добавить
+          </button>
+        </div>
+      )}
 
       <div style={s.btnRow}>
         <button style={{ ...s.btn, background: 'linear-gradient(135deg,#22aa55,#44dd88)' }} onClick={handleConfirm}>
@@ -248,6 +324,30 @@ const s: Record<string, React.CSSProperties> = {
     display: 'inline-flex', alignItems: 'center', gap: 4,
   },
   chipSub: { color: '#888', fontSize: 12 },
+  chipDelete: {
+    border: 'none', background: 'transparent', color: '#aaa', cursor: 'pointer',
+    padding: 2, display: 'inline-flex', marginLeft: 2,
+  },
+  addChip: {
+    padding: '6px 14px', borderRadius: 8, border: '2px dashed #445',
+    fontSize: 14, background: 'transparent', color: '#aaa', cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+  },
+  addPanel: {
+    marginTop: 12, width: '100%', maxWidth: 640,
+    background: '#15152a', borderRadius: 10, padding: 14,
+    border: '1px solid #334', display: 'flex', flexDirection: 'column', gap: 10,
+  },
+  addRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  addLabel: { color: '#888', fontSize: 13, minWidth: 40 },
+  pill: {
+    padding: '5px 12px', borderRadius: 16, border: '1px solid #445',
+    background: 'transparent', color: '#ccc', fontSize: 13, cursor: 'pointer',
+  },
+  pillActive: { background: '#6644ff', borderColor: '#6644ff', color: '#fff' },
+  colorDot: {
+    width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer',
+  },
   btnRow: {
     marginTop: 20, display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center',
   },
