@@ -96,6 +96,54 @@ function drawShipDetails(ctx: CanvasRenderingContext2D, type: string, R: number,
   }
 }
 
+// ─── Взрыв уничтоженного корабля ────────────────────────────────────────────────
+
+/**
+ * Рисует взрыв в координатах (cx, cy): расширяющееся огненное кольцо,
+ * белую вспышку в центре и разлетающиеся обломки-искры.
+ * progress 0..1 — прогресс взрыва от вспышки до полного затухания.
+ */
+function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, R: number, seed: number, progress: number) {
+  const p = Math.min(Math.max(progress, 0), 1);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Огненное кольцо, расширяется и тускнеет
+  const ringR = R * (0.4 + p * 2.2);
+  const ringGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, ringR);
+  ringGrad.addColorStop(0,   `rgba(255,235,180,${0.85 * (1 - p)})`);
+  ringGrad.addColorStop(0.5, `rgba(255,140,40,${0.6 * (1 - p)})`);
+  ringGrad.addColorStop(1,   'rgba(255,80,20,0)');
+  ctx.beginPath();
+  ctx.fillStyle = ringGrad;
+  ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Белая вспышка в самом начале взрыва
+  if (p < 0.4) {
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,255,255,${1 - p / 0.4})`;
+    ctx.arc(0, 0, R * 0.9 * (1 - p), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Обломки — искры, разлетающиеся по детерминированным направлениям
+  const PARTICLES = 10;
+  for (let i = 0; i < PARTICLES; i++) {
+    const ang  = (i / PARTICLES) * Math.PI * 2 + seed;
+    const dist = R * (0.6 + (i % 3) * 0.5) * p * 2;
+    const px   = Math.cos(ang) * dist;
+    const py   = Math.sin(ang) * dist;
+    ctx.beginPath();
+    ctx.fillStyle = i % 2 === 0 ? `rgba(255,200,120,${1 - p})` : `rgba(255,255,255,${1 - p})`;
+    ctx.arc(px, py, Math.max(1, R * 0.12 * (1 - p)), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 // ─── Canvas renderer ──────────────────────────────────────────────────────────
 
 function drawArena(
@@ -196,6 +244,12 @@ function drawArena(
     }
   }
 
+  // Корабль, уничтоженный именно этим выстрелом — для него отдельно
+  // проигрывается анимация взрыва, прежде чем он станет обломком.
+  const justDestroyedId = (event && event.result === 'hit' && event.targetId && !event.aliveSnapshot[event.targetId])
+    ? event.targetId
+    : null;
+
   // Корабли
   const R = 22;
   for (const ship of ships) {
@@ -203,6 +257,9 @@ function drawArena(
     const color      = COLOR_HEX[ship.color];
     const isShooter  = event?.shooterId === ship.id;
     const isTarget   = event?.targetId  === ship.id;
+    const isExploding   = ship.id === justDestroyedId;
+    const explodeStart  = 0.8; // момент попадания луча — начало взрыва
+    const showAsAlive   = ship.alive || (isExploding && animPct < explodeStart);
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -216,10 +273,10 @@ function drawArena(
     // Корпус корабля — свой силуэт под каждый тип, с объёмным градиентом
     const rad = (ship.angle * Math.PI) / 180;
     ctx.rotate(rad);
-    ctx.globalAlpha = ship.alive ? 1 : 0.35;
+    ctx.globalAlpha = showAsAlive ? 1 : 0.35;
 
     const hullGradient = ctx.createLinearGradient(-R, 0, R, 0);
-    if (ship.alive) {
+    if (showAsAlive) {
       hullGradient.addColorStop(0, '#0a0a14');
       hullGradient.addColorStop(0.55, color);
       hullGradient.addColorStop(1, '#ffffff');
@@ -230,17 +287,23 @@ function drawArena(
 
     shipHullPath(ctx, ship.type, R);
     ctx.fillStyle   = hullGradient;
-    ctx.strokeStyle = ship.alive ? '#fff' : '#555';
+    ctx.strokeStyle = showAsAlive ? '#fff' : '#555';
     ctx.lineWidth   = isShooter ? 2.5 : 1.5;
     ctx.fill();
     ctx.stroke();
 
-    if (ship.alive) drawShipDetails(ctx, ship.type, R, color);
+    if (showAsAlive) drawShipDetails(ctx, ship.type, R, color);
 
     ctx.restore();
 
+    // Взрыв — рисуется поверх корпуса, без поворота корабля
+    if (isExploding && animPct >= explodeStart) {
+      const seed = (ship.id.charCodeAt(0) || 1) * 0.7;
+      drawExplosion(ctx, cx, cy, R, seed, (animPct - explodeStart) / (1 - explodeStart));
+    }
+
     // HP бар
-    if (ship.alive) {
+    if (showAsAlive) {
       const barW = R * 2.2;
       const barH = 5;
       const bx   = cx - barW / 2;
@@ -252,14 +315,14 @@ function drawArena(
     }
 
     // Метка
-    ctx.fillStyle   = ship.alive ? '#fff' : '#666';
-    ctx.globalAlpha = ship.alive ? 1 : 0.4;
+    ctx.fillStyle   = showAsAlive ? '#fff' : '#666';
+    ctx.globalAlpha = showAsAlive ? 1 : 0.4;
     ctx.font        = 'bold 10px sans-serif';
     ctx.textAlign   = 'center';
     ctx.fillText(ship.label[0], cx, cy + R + 22); // первая буква типа
 
     // Щиты — маленькие точки вокруг корабля
-    if (ship.alive) {
+    if (showAsAlive) {
       const sideAngles = { front: ship.angle, rear: ship.angle + 180, left: ship.angle - 90, right: ship.angle + 90 };
       for (const [side, ang] of Object.entries(sideAngles)) {
         const active = ship.shields[side as keyof typeof ship.shields];
