@@ -6,6 +6,7 @@ import { SHIP_STATS } from '../types/ships';
 import {
   SwordsIcon, DiceIcon, HitIcon, ShieldIcon, MissIcon,
   SkullIcon, TrophyIcon, HandshakeIcon, RestartIcon,
+  PlayIcon, PauseIcon, ChevronLeftIcon, ChevronRightIcon,
 } from './icons';
 
 const COLOR_HEX: Record<string, string> = {
@@ -281,11 +282,12 @@ export default function ArenaScreen() {
   const navigate = useNavigate();
   const {
     battleShips, events, currentEventIdx, winner, isBattleReady,
-    startBattle,
+    startBattle, nextEvent, prevEvent,
   } = useGameStore();
 
   const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const [animPct, setAnimPct] = useState(0);
+  const [animPct, setAnimPct]     = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
   const animRef    = useRef<number>(0);
   const playTimer  = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -329,15 +331,28 @@ export default function ArenaScreen() {
     animRef.current = requestAnimationFrame(tick);
   };
 
-  // Бой проигрывается полностью автоматически: от фазы инициативы до последнего
-  // выстрела, без участия пользователя.
+  const goNext = () => {
+    cancelAnimationFrame(animRef.current);
+    setAnimPct(0);
+    nextEvent();
+    runAnim(() => {});
+  };
+
+  const goPrev = () => {
+    cancelAnimationFrame(animRef.current);
+    setAnimPct(1);
+    prevEvent();
+  };
+
+  // Бой по умолчанию проигрывается сам по таймеру, но можно поставить на
+  // паузу и прокручивать ходы вручную кнопками ◀ / ▶.
   useEffect(() => {
-    if (!isBattleReady) return;
+    if (!isBattleReady || !isPlaying) return;
     let cancelled = false;
     const step = () => {
       if (cancelled) return;
       const { currentEventIdx: idx, events: evs } = useGameStore.getState();
-      if (idx >= evs.length - 1) return;
+      if (idx >= evs.length - 1) { setIsPlaying(false); return; }
       cancelAnimationFrame(animRef.current);
       setAnimPct(0);
       useGameStore.getState().nextEvent();
@@ -346,7 +361,7 @@ export default function ArenaScreen() {
     const initialDelay = currentEventIdx < 0 ? 1200 : 300;
     playTimer.current = setTimeout(step, initialDelay);
     return () => { cancelled = true; clearTimeout(playTimer.current); };
-  }, [isBattleReady]); // eslint-disable-line
+  }, [isBattleReady, isPlaying]); // eslint-disable-line
 
   // ── Текущее событие ──────────────────────────────────────────────────────
   const ev = currentEventIdx >= 0 ? events[currentEventIdx] : null;
@@ -431,6 +446,25 @@ export default function ArenaScreen() {
         </div>
       )}
 
+      {/* Управление ходами: автоматически по таймеру или вручную кнопками */}
+      <div style={s.controls}>
+        <button style={s.btn} onClick={goPrev} disabled={currentEventIdx < 0}>
+          <ChevronLeftIcon />
+        </button>
+        <button
+          style={{ ...s.btn, background: isPlaying ? '#883' : 'linear-gradient(135deg,#6644ff,#aa44ff)', minWidth: 110 }}
+          onClick={() => setIsPlaying(p => !p)}
+          disabled={isLast}
+        >
+          {isPlaying
+            ? <span style={s.btnInline}><PauseIcon /> Пауза</span>
+            : <span style={s.btnInline}><PlayIcon /> Авто</span>}
+        </button>
+        <button style={s.btn} onClick={goNext} disabled={isLast}>
+          <ChevronRightIcon />
+        </button>
+      </div>
+
       {/* Список кораблей */}
       <div style={s.shipList}>
         {battleShips.map(ship => {
@@ -504,7 +538,9 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 9, border: 'none', cursor: 'pointer',
     background: '#223', color: '#fff',
     transition: 'opacity .15s',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   },
+  btnInline: { display: 'inline-flex', alignItems: 'center', gap: 8 },
   shipList: {
     marginTop: 12, width: '100%', maxWidth: 480,
     display: 'flex', flexWrap: 'wrap', gap: 7,

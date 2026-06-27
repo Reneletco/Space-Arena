@@ -100,6 +100,39 @@ export function HandshakeIcon({ size = 44, className }: IconProps) {
   );
 }
 
+export function PlayIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M6 4l14 8-14 8V4z" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function PauseIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="5" y="4" width="5" height="16" rx="1" fill="currentColor" />
+      <rect x="14" y="4" width="5" height="16" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function ChevronLeftIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M15 4l-8 8 8 8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
+export function ChevronRightIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M9 4l8 8-8 8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
 export function GalleryIcon({ size = 40, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
