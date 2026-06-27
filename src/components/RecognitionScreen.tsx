@@ -5,6 +5,7 @@ import { detectShips } from '../recognition/colorDetector';
 import { drawOverlay } from '../recognition/drawOverlay';
 import type { DetectedShip } from '../types/ships';
 import { SHIP_STATS } from '../types/ships';
+import { SwordsIcon, RestartIcon } from './icons';
 
 type Status = 'detecting' | 'done' | 'error';
 
@@ -83,13 +84,13 @@ export default function RecognitionScreen() {
       {/* Buttons */}
       <div style={s.btnRow}>
         {status === 'done' && ships.length > 0 && (
-          <button style={{ ...s.btn, background: 'linear-gradient(135deg,#22aa55,#44dd88)' }}
+          <button style={{ ...s.btn, background: 'linear-gradient(135deg,#22aa55,#44dd88)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={handleBattle}>
-            ⚔️ В бой!
+            <SwordsIcon size={18} /> В бой!
           </button>
         )}
-        <button style={{ ...s.btn, background: '#333' }} onClick={handleRetake}>
-          🔄 Переснять
+        <button style={{ ...s.btn, background: '#333', display: 'inline-flex', alignItems: 'center', gap: 8 }} onClick={handleRetake}>
+          <RestartIcon /> Переснять
         </button>
       </div>
     </div>
