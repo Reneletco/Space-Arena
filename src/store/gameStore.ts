@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { DetectedShip } from '../types/ships';
 import type { BattleShip, ShotEvent } from '../types/battle';
-import { simulateBattle } from '../battle/engine';
+import { simulateBattle } from '../battle/battleEngine';
 
 interface GameState {
   rawImage:         string | null;
