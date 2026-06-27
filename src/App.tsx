@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import CameraScreen from './components/CameraScreen';
 import RecognitionScreen from './components/RecognitionScreen';
+import EditScreen from './components/EditScreen';
 import ArenaScreen from './components/ArenaScreen';
 import ResultScreen from './components/ResultScreen';
 
@@ -10,6 +11,7 @@ function App() {
       <Routes>
         <Route path="/" element={<CameraScreen />} />
         <Route path="/recognition" element={<RecognitionScreen />} />
+        <Route path="/edit" element={<EditScreen />} />
         <Route path="/arena" element={<ArenaScreen />} />
         <Route path="/result" element={<ResultScreen />} />
       </Routes>

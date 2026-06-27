@@ -17,6 +17,9 @@ interface GameState {
   // Actions
   setImage:         (image: string) => void;
   setShips:         (ships: DetectedShip[]) => void;
+  updateShip:       (id: string, patch: Partial<DetectedShip>) => void;
+  addShip:          (ship: DetectedShip) => void;
+  removeShip:       (id: string) => void;
   startBattle:      () => void;
   nextEvent:        () => void;
   prevEvent:        () => void;
@@ -34,6 +37,18 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setImage:  image  => set({ rawImage: image }),
   setShips:  ships  => set({ detectedShips: ships }),
+
+  updateShip: (id, patch) => set(state => ({
+    detectedShips: state.detectedShips.map(s => s.id === id ? { ...s, ...patch } : s),
+  })),
+
+  addShip: ship => set(state => ({
+    detectedShips: [...state.detectedShips, ship],
+  })),
+
+  removeShip: id => set(state => ({
+    detectedShips: state.detectedShips.filter(s => s.id !== id),
+  })),
 
   startBattle: () => {
     const { detectedShips } = get();

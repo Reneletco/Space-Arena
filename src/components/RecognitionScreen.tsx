@@ -38,7 +38,7 @@ export default function RecognitionScreen() {
 
   const handleBattle = () => {
     setShips(ships);
-    navigate('/arena');
+    navigate('/edit');
   };
 
   const handleRetake = () => navigate('/');
