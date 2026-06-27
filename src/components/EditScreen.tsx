@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
-import { drawOverlay } from '../recognition/drawOverlay';
 import type { DetectedShip } from '../types/ships';
 import { SHIP_STATS } from '../types/ships';
 import { SwordsIcon, ChevronLeftIcon } from './icons';
@@ -10,25 +9,171 @@ const COLOR_HEX: Record<string, string> = {
   red: '#ff4444', blue: '#3399ff', green: '#33dd55', yellow: '#ffdd00',
 };
 
+type DragMode = 'move' | 'rotate';
+interface DragState { id: string; mode: DragMode; offsetX: number; offsetY: number }
+
+/** Рисует фото стола и наложение: рамки кораблей, стрелку направления и
+ * ручку поворота. Выбранный корабль подсвечивается толстой обводкой. */
+function drawEditOverlay(
+  canvas: HTMLCanvasElement,
+  img: HTMLImageElement,
+  ships: DetectedShip[],
+  selectedId: string | null,
+) {
+  canvas.width  = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
+
+  for (const ship of ships) {
+    const hex = COLOR_HEX[ship.color] ?? '#ffffff';
+    const { x, y, w, h } = ship.bbox;
+    const isSelected = ship.id === selectedId;
+
+    ctx.strokeStyle = hex;
+    ctx.lineWidth   = isSelected ? Math.max(4, w * 0.05) : Math.max(2, w * 0.03);
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.fillStyle = hex + (isSelected ? '33' : '22');
+    ctx.fillRect(x, y, w, h);
+
+    const label = `${SHIP_STATS[ship.type].label} (${ship.color})`;
+    ctx.font = `bold ${Math.max(12, h * 0.15)}px sans-serif`;
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = hex + 'cc';
+    ctx.fillRect(x, y - Math.max(18, h * 0.18), tw + 8, Math.max(18, h * 0.18));
+    ctx.fillStyle = '#000';
+    ctx.fillText(label, x + 4, y - 4);
+
+    // Стрелка направления носа + ручка поворота на её конце
+    const cx  = x + w / 2;
+    const cy  = y + h / 2;
+    const len = Math.min(w, h) * 0.55;
+    const rad = (ship.angle * Math.PI) / 180;
+    const ex  = cx + Math.cos(rad) * len;
+    const ey  = cy + Math.sin(rad) * len;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(ex, ey);
+    ctx.strokeStyle = hex;
+    ctx.lineWidth   = Math.max(2, len * 0.08);
+    ctx.stroke();
+
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(ex, ey, Math.max(10, len * 0.22), 0, Math.PI * 2);
+      ctx.fillStyle   = '#fff';
+      ctx.strokeStyle = hex;
+      ctx.lineWidth   = 3;
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+}
+
 export default function EditScreen() {
-  const navigate    = useNavigate();
-  const rawImage    = useGameStore(s => s.rawImage);
-  const detected    = useGameStore(s => s.detectedShips);
-  const setShips    = useGameStore(s => s.setShips);
+  const navigate = useNavigate();
+  const rawImage = useGameStore(s => s.rawImage);
+  const detected = useGameStore(s => s.detectedShips);
+  const setShips = useGameStore(s => s.setShips);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [ships, setLocalShips] = useState<DetectedShip[]>(detected);
+  const imgRef    = useRef<HTMLImageElement | null>(null);
+  const dragRef   = useRef<DragState | null>(null);
 
+  const [ships, setLocalShips]   = useState<DetectedShip[]>(detected);
+  const [selectedId, setSelected] = useState<string | null>(null);
+  const [imgReady, setImgReady]  = useState(false);
+
+  // Загружаем фото один раз
   useEffect(() => {
     if (!rawImage) { navigate('/'); return; }
     setLocalShips(detected);
+    const img = new Image();
+    img.onload = () => { imgRef.current = img; setImgReady(true); };
+    img.src = rawImage;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Перерисовка наложения при любом изменении расстановки
+  // Перерисовка при любом изменении расстановки или выбора
   useEffect(() => {
-    if (!rawImage || !canvasRef.current) return;
-    drawOverlay(canvasRef.current, rawImage, ships);
-  }, [rawImage, ships]);
+    if (!imgReady || !canvasRef.current || !imgRef.current) return;
+    drawEditOverlay(canvasRef.current, imgRef.current, ships, selectedId);
+  }, [ships, selectedId, imgReady]);
+
+  const toImageCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const { x, y } = toImageCoords(e);
+
+    // Сначала проверяем ручку поворота уже выбранного корабля
+    const selected = ships.find(sh => sh.id === selectedId);
+    if (selected) {
+      const cx  = selected.bbox.x + selected.bbox.w / 2;
+      const cy  = selected.bbox.y + selected.bbox.h / 2;
+      const len = Math.min(selected.bbox.w, selected.bbox.h) * 0.55;
+      const rad = (selected.angle * Math.PI) / 180;
+      const hx  = cx + Math.cos(rad) * len;
+      const hy  = cy + Math.sin(rad) * len;
+      if (Math.hypot(x - hx, y - hy) < Math.max(16, len * 0.3)) {
+        dragRef.current = { id: selected.id, mode: 'rotate', offsetX: 0, offsetY: 0 };
+        canvasRef.current!.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+
+    // Иначе ищем корабль под курсором (сверху вниз по порядку отрисовки)
+    for (let i = ships.length - 1; i >= 0; i--) {
+      const ship = ships[i];
+      const { x: bx, y: by, w, h } = ship.bbox;
+      if (x >= bx && x <= bx + w && y >= by && y <= by + h) {
+        setSelected(ship.id);
+        dragRef.current = {
+          id: ship.id, mode: 'move',
+          offsetX: x - (bx + w / 2), offsetY: y - (by + h / 2),
+        };
+        canvasRef.current!.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+
+    setSelected(null);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const { x, y } = toImageCoords(e);
+
+    setLocalShips(prev => prev.map(ship => {
+      if (ship.id !== drag.id) return ship;
+      if (drag.mode === 'move') {
+        const newCx = x - drag.offsetX;
+        const newCy = y - drag.offsetY;
+        return {
+          ...ship,
+          cx: newCx, cy: newCy,
+          bbox: { ...ship.bbox, x: newCx - ship.bbox.w / 2, y: newCy - ship.bbox.h / 2 },
+        };
+      }
+      const cx = ship.bbox.x + ship.bbox.w / 2;
+      const cy = ship.bbox.y + ship.bbox.h / 2;
+      const angle = (Math.atan2(y - cy, x - cx) * 180) / Math.PI;
+      return { ...ship, angle };
+    }));
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    dragRef.current = null;
+    canvasRef.current?.releasePointerCapture(e.pointerId);
+  };
 
   const handleConfirm = () => {
     setShips(ships);
@@ -38,15 +183,28 @@ export default function EditScreen() {
   return (
     <div style={s.root}>
       <h2 style={s.title}>Расстановка кораблей</h2>
-      <p style={s.hint}>Проверьте и поправьте позиции перед боем</p>
+      <p style={s.hint}>Перетащите корабль — позиция; перетащите белую ручку на конце стрелки — поворот</p>
 
       <div style={s.canvasWrap}>
-        <canvas ref={canvasRef} style={s.canvas} />
+        <canvas
+          ref={canvasRef}
+          style={s.canvas}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        />
       </div>
 
       <div style={s.list}>
         {ships.map(ship => (
-          <div key={ship.id} style={{ ...s.chip, borderColor: COLOR_HEX[ship.color] }}>
+          <div
+            key={ship.id}
+            style={{
+              ...s.chip, borderColor: COLOR_HEX[ship.color],
+              background: ship.id === selectedId ? '#23234a' : '#15152a',
+            }}
+            onClick={() => setSelected(ship.id)}
+          >
             <span style={{ color: COLOR_HEX[ship.color], fontWeight: 700 }}>■</span>
             &nbsp;{SHIP_STATS[ship.type].label}
             <span style={s.chipSub}>&nbsp;·&nbsp;{ship.color}&nbsp;·&nbsp;{Math.round(ship.angle)}°</span>
@@ -73,20 +231,20 @@ const s: Record<string, React.CSSProperties> = {
     background: '#0d0d1a', color: '#fff',
   },
   title: { margin: '0 0 4px', fontSize: 22, letterSpacing: 1 },
-  hint: { margin: '0 0 14px', color: '#888', fontSize: 14 },
+  hint: { margin: '0 0 14px', color: '#888', fontSize: 13, textAlign: 'center', maxWidth: 480 },
   canvasWrap: {
     position: 'relative', width: '100%', maxWidth: 640,
     borderRadius: 10, overflow: 'hidden', background: '#111',
     border: '2px solid #334', minHeight: 200,
   },
-  canvas: { display: 'block', width: '100%', height: 'auto' },
+  canvas: { display: 'block', width: '100%', height: 'auto', touchAction: 'none', cursor: 'grab' },
   list: {
     marginTop: 14, width: '100%', maxWidth: 640,
     display: 'flex', flexWrap: 'wrap', gap: 8,
   },
   chip: {
     padding: '6px 12px', borderRadius: 8, border: '2px solid',
-    fontSize: 14, background: '#15152a',
+    fontSize: 14, background: '#15152a', cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', gap: 4,
   },
   chipSub: { color: '#888', fontSize: 12 },
