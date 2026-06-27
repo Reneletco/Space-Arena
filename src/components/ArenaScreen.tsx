@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import type { BattleShip, ShotEvent } from '../types/battle';
 import { SHIP_STATS } from '../types/ships';
+import {
+  SwordsIcon, DiceIcon, HitIcon, ShieldIcon, MissIcon,
+  SkullIcon, TrophyIcon, HandshakeIcon, RestartIcon,
+} from './icons';
 
 const COLOR_HEX: Record<string, string> = {
   red: '#ff4444', blue: '#3399ff', green: '#33dd55', yellow: '#ffdd00',
@@ -13,8 +17,10 @@ const COLOR_RU: Record<string, string> = {
 const SHIELD_RU: Record<string, string> = {
   front: 'нос', rear: 'корма', left: 'левый борт', right: 'правый борт',
 };
-const RESULT_ICON: Record<string, string> = {
-  hit: '💥', blocked: '🛡️', miss: '〰️',
+const RESULT_ICON: Record<string, (key: string) => React.ReactNode> = {
+  hit:     key => <HitIcon key={key} className="icon-pop" />,
+  blocked: key => <ShieldIcon key={key} className="icon-pop" />,
+  miss:    key => <MissIcon key={key} className="icon-drift" />,
 };
 
 // ─── Силуэты корпусов кораблей ─────────────────────────────────────────────────
@@ -275,14 +281,13 @@ export default function ArenaScreen() {
   const navigate = useNavigate();
   const {
     battleShips, events, currentEventIdx, winner, isBattleReady,
-    startBattle, nextEvent, prevEvent,
+    startBattle,
   } = useGameStore();
 
   const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const [animPct, setAnimPct]     = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [animPct, setAnimPct] = useState(0);
   const animRef    = useRef<number>(0);
-  const playTimer  = useRef<ReturnType<typeof setTimeout>>();
+  const playTimer  = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Стартуем бой при маунте
   useEffect(() => {
@@ -324,33 +329,24 @@ export default function ArenaScreen() {
     animRef.current = requestAnimationFrame(tick);
   };
 
-  const goNext = () => {
-    cancelAnimationFrame(animRef.current);
-    setAnimPct(0);
-    nextEvent();
-    runAnim(() => {});
-  };
-
-  const goPrev = () => {
-    cancelAnimationFrame(animRef.current);
-    setAnimPct(1);
-    prevEvent();
-  };
-
-  // Авто-прокрутка
+  // Бой проигрывается полностью автоматически: от фазы инициативы до последнего
+  // выстрела, без участия пользователя.
   useEffect(() => {
-    if (!isPlaying) { clearTimeout(playTimer.current); return; }
+    if (!isBattleReady) return;
+    let cancelled = false;
     const step = () => {
+      if (cancelled) return;
       const { currentEventIdx: idx, events: evs } = useGameStore.getState();
-      if (idx >= evs.length - 1) { setIsPlaying(false); return; }
+      if (idx >= evs.length - 1) return;
       cancelAnimationFrame(animRef.current);
       setAnimPct(0);
       useGameStore.getState().nextEvent();
       runAnim(() => { playTimer.current = setTimeout(step, 500); });
     };
-    playTimer.current = setTimeout(step, 300);
-    return () => clearTimeout(playTimer.current);
-  }, [isPlaying]); // eslint-disable-line
+    const initialDelay = currentEventIdx < 0 ? 1200 : 300;
+    playTimer.current = setTimeout(step, initialDelay);
+    return () => { cancelled = true; clearTimeout(playTimer.current); };
+  }, [isBattleReady]); // eslint-disable-line
 
   // ── Текущее событие ──────────────────────────────────────────────────────
   const ev = currentEventIdx >= 0 ? events[currentEventIdx] : null;
@@ -366,15 +362,16 @@ export default function ArenaScreen() {
     const tName = `${COLOR_RU[target.color]} ${target.label}`;
     if (ev.result === 'blocked') return `${sName} → ${tName}: щит (${SHIELD_RU[ev.shieldSide!]}) поглотил выстрел`;
     const hp = ev.hpSnapshot[target.id];
-    if (hp <= 0) return `${sName} → ${tName}: УНИЧТОЖЕН 💀`;
+    if (hp <= 0) return `${sName} → ${tName}: УНИЧТОЖЕН`;
     return `${sName} → ${tName}: попадание! HP ${hp + 1} → ${hp}`;
   })();
 
   const initiativePhase = currentEventIdx < 0;
+  const isDestroyed = !!(ev?.result === 'hit' && target && ev.hpSnapshot[target.id] <= 0);
 
   return (
     <div style={s.root}>
-      <h2 style={s.title}>⚔️ Арена</h2>
+      <h2 style={s.title}><SwordsIcon className="icon-drift" /> Арена</h2>
 
       {/* Canvas */}
       <canvas
@@ -386,7 +383,7 @@ export default function ArenaScreen() {
       {/* Фаза инициативы */}
       {initiativePhase && isBattleReady && (
         <div style={s.initiativeBox}>
-          <p style={s.initTitle}>🎲 Инициатива</p>
+          <p style={s.initTitle}><DiceIcon className="icon-pulse" /> Инициатива</p>
           {[...battleShips]
             .sort((a, b) => b.initiative - a.initiative)
             .map(ship => (
@@ -426,19 +423,6 @@ export default function ArenaScreen() {
           </button>
         </div>
       )}
-
-      {/* Управление */}
-      <div style={s.controls}>
-        <button style={s.btn} onClick={goPrev} disabled={currentEventIdx < 0}>◀</button>
-        <button
-          style={{ ...s.btn, background: isPlaying ? '#883' : 'linear-gradient(135deg,#6644ff,#aa44ff)', minWidth: 110 }}
-          onClick={() => setIsPlaying(p => !p)}
-          disabled={isLast}
-        >
-          {isPlaying ? '⏸ Пауза' : '▶ Авто'}
-        </button>
-        <button style={s.btn} onClick={goNext} disabled={isLast}>▶</button>
-      </div>
 
       {/* Список кораблей */}
       <div style={s.shipList}>
