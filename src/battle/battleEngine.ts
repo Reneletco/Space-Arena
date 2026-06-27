@@ -9,7 +9,7 @@
 
 import type { DetectedShip } from '../types/ships';
 import { SHIP_STATS } from '../types/ships';
-import type { BattleShip, ShotResult } from '../types/battle';
+import type { BattleShip, ShotEvent, ShotResult } from '../types/battle';
 
 // ─── Хелперы ──────────────────────────────────────────────────────────────────
 
@@ -142,4 +142,60 @@ export function resolveShot(shooter: BattleShip, target: BattleShip): ResolvedSh
     target.alive = false;
   }
   return { result: 'hit' };
+}
+
+// ─── Главный цикл боя ──────────────────────────────────────────────────────────
+
+export interface BattleResult {
+  ships:  BattleShip[];
+  events: ShotEvent[];
+  /** Цвет победителя, либо null если бой закончился ничьей */
+  winner: string | null;
+}
+
+/**
+ * Прогоняет весь бой от начала до конца и возвращает итоговые корабли,
+ * лог всех выстрелов (с снимками HP/alive после каждого хода) и победителя.
+ */
+export function simulateBattle(detected: DetectedShip[]): BattleResult {
+  const ships = buildBattleShips(detected);
+  const order = getFiringOrder(ships);
+  const events: ShotEvent[] = [];
+
+  for (const shooter of order) {
+    if (!shooter.alive) continue;
+
+    const target = findTarget(shooter, ships);
+    let result: ShotResult = 'miss';
+    let shieldSide: ShotEvent['shieldSide'];
+
+    if (target) {
+      const shot = resolveShot(shooter, target);
+      result     = shot.result;
+      shieldSide = shot.shieldSide;
+    }
+
+    const hpSnapshot:    Record<string, number>  = {};
+    const aliveSnapshot: Record<string, boolean> = {};
+    for (const s of ships) {
+      hpSnapshot[s.id]    = s.hp;
+      aliveSnapshot[s.id] = s.alive;
+    }
+
+    events.push({
+      shooterId:      shooter.id,
+      targetId:       target?.id ?? null,
+      result,
+      shieldSide,
+      hpSnapshot,
+      aliveSnapshot,
+      initiativeRoll: shooter.initiative,
+    });
+  }
+
+  const survivors    = ships.filter(s => s.alive);
+  const survivorColors = [...new Set(survivors.map(s => s.color))];
+  const winner = survivorColors.length === 1 ? survivorColors[0] : null;
+
+  return { ships, events, winner };
 }
