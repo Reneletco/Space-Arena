@@ -153,44 +153,64 @@ export interface BattleResult {
   winner: string | null;
 }
 
+/** Сколько живых цветов осталось на арене */
+function aliveColorCount(ships: BattleShip[]): number {
+  return new Set(ships.filter(s => s.alive).map(s => s.color)).size;
+}
+
+/** Предохранитель от бесконечного цикла, если бой зашёл в сталемат */
+const MAX_ROUNDS = 50;
+
 /**
- * Прогоняет весь бой от начала до конца и возвращает итоговые корабли,
- * лог всех выстрелов (с снимками HP/alive после каждого хода) и победителя.
+ * Прогоняет весь бой раундами (каждый раунд — все живые корабли стреляют
+ * в порядке убывания инициативы) до тех пор, пока не останется один цвет
+ * выживших или раунд не проходит без единого попадания/блока (стрелять
+ * больше не во кого/нечем — щиты исчерпаны, цели нет на линии огня).
+ * Возвращает итоговые корабли, лог всех выстрелов (со снимками HP/alive
+ * после каждого хода) и победителя.
  */
 export function simulateBattle(detected: DetectedShip[]): BattleResult {
   const ships = buildBattleShips(detected);
   const order = getFiringOrder(ships);
   const events: ShotEvent[] = [];
 
-  for (const shooter of order) {
-    if (!shooter.alive) continue;
+  for (let round = 0; round < MAX_ROUNDS && aliveColorCount(ships) > 1; round++) {
+    let progressed = false;
 
-    const target = findTarget(shooter, ships);
-    let result: ShotResult = 'miss';
-    let shieldSide: ShotEvent['shieldSide'];
+    for (const shooter of order) {
+      if (!shooter.alive) continue;
+      if (aliveColorCount(ships) <= 1) break;
 
-    if (target) {
-      const shot = resolveShot(shooter, target);
-      result     = shot.result;
-      shieldSide = shot.shieldSide;
+      const target = findTarget(shooter, ships);
+      let result: ShotResult = 'miss';
+      let shieldSide: ShotEvent['shieldSide'];
+
+      if (target) {
+        const shot = resolveShot(shooter, target);
+        result     = shot.result;
+        shieldSide = shot.shieldSide;
+        progressed = true;
+      }
+
+      const hpSnapshot:    Record<string, number>  = {};
+      const aliveSnapshot: Record<string, boolean> = {};
+      for (const s of ships) {
+        hpSnapshot[s.id]    = s.hp;
+        aliveSnapshot[s.id] = s.alive;
+      }
+
+      events.push({
+        shooterId:      shooter.id,
+        targetId:       target?.id ?? null,
+        result,
+        shieldSide,
+        hpSnapshot,
+        aliveSnapshot,
+        initiativeRoll: shooter.initiative,
+      });
     }
 
-    const hpSnapshot:    Record<string, number>  = {};
-    const aliveSnapshot: Record<string, boolean> = {};
-    for (const s of ships) {
-      hpSnapshot[s.id]    = s.hp;
-      aliveSnapshot[s.id] = s.alive;
-    }
-
-    events.push({
-      shooterId:      shooter.id,
-      targetId:       target?.id ?? null,
-      result,
-      shieldSide,
-      hpSnapshot,
-      aliveSnapshot,
-      initiativeRoll: shooter.initiative,
-    });
+    if (!progressed) break; // стрелять больше не во кого — дальше ничего не изменится
   }
 
   const survivors    = ships.filter(s => s.alive);
