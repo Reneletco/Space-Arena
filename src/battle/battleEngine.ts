@@ -75,15 +75,24 @@ export function getFiringOrder(ships: BattleShip[]): BattleShip[] {
 
 // ─── Линия огня ───────────────────────────────────────────────────────────────
 
-/** Радиус попадания в нормализованных координатах (0..1 от размеров фото) */
-const HIT_RADIUS = 0.06;
+/**
+ * Радиус попадания по умолчанию. Координаты кораблей могут быть как
+ * нормализованными (0..1), так и пиксельными (с реального фото) — поэтому
+ * вызывающая сторона (simulateBattle) обычно передаёт радиус, рассчитанный
+ * от реального размера кораблей на конкретном фото.
+ */
+const DEFAULT_HIT_RADIUS = 0.06;
 
 /**
  * Находит ближайший живой корабль на линии огня стрелка
  * (луч из носа стрелка в направлении его угла, до бесконечности).
  * Возвращает null, если на линии огня никого нет — это промах.
  */
-export function findTarget(shooter: BattleShip, ships: BattleShip[]): BattleShip | null {
+export function findTarget(
+  shooter: BattleShip,
+  ships: BattleShip[],
+  hitRadius: number = DEFAULT_HIT_RADIUS,
+): BattleShip | null {
   const rad = (shooter.angle * Math.PI) / 180;
   const dx  = Math.cos(rad);
   const dy  = Math.sin(rad);
@@ -104,7 +113,7 @@ export function findTarget(shooter: BattleShip, ships: BattleShip[]): BattleShip
 
     // Перпендикулярное расстояние цели от линии луча
     const perp = Math.abs(ex * dy - ey * dx);
-    if (perp > HIT_RADIUS) continue;
+    if (perp > hitRadius) continue;
 
     if (proj < bestDist) {
       bestDist = proj;
@@ -162,6 +171,19 @@ function aliveColorCount(ships: BattleShip[]): number {
 const MAX_ROUNDS = 50;
 
 /**
+ * Радиус попадания должен соответствовать реальному масштабу координат:
+ * для кораблей, найденных на фото, координаты — в пикселях, а не 0..1.
+ * Берём средний размер найденного корабля как «радиус» его корпуса —
+ * луч засчитывает попадание, если проходит в пределах этого расстояния
+ * от центра цели.
+ */
+function computeHitRadius(detected: DetectedShip[]): number {
+  if (!detected.length) return 0.06;
+  const avgSize = detected.reduce((sum, d) => sum + (d.bbox.w + d.bbox.h) / 2, 0) / detected.length;
+  return Math.max(avgSize * 0.6, 1);
+}
+
+/**
  * Прогоняет весь бой раундами (каждый раунд — все живые корабли стреляют
  * в порядке убывания инициативы) до тех пор, пока не останется один цвет
  * выживших или раунд не проходит без единого попадания/блока (стрелять
@@ -172,6 +194,7 @@ const MAX_ROUNDS = 50;
 export function simulateBattle(detected: DetectedShip[]): BattleResult {
   const ships = buildBattleShips(detected);
   const order = getFiringOrder(ships);
+  const hitRadius = computeHitRadius(detected);
   const events: ShotEvent[] = [];
 
   for (let round = 0; round < MAX_ROUNDS && aliveColorCount(ships) > 1; round++) {
@@ -181,7 +204,7 @@ export function simulateBattle(detected: DetectedShip[]): BattleResult {
       if (!shooter.alive) continue;
       if (aliveColorCount(ships) <= 1) break;
 
-      const target = findTarget(shooter, ships);
+      const target = findTarget(shooter, ships, hitRadius);
       let result: ShotResult = 'miss';
       let shieldSide: ShotEvent['shieldSide'];
 
