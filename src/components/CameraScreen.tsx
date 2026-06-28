@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCamera } from '../hooks/useCamera';
 import { useGameStore } from '../store/gameStore';
+import { GalleryIcon, CameraIcon, ShutterIcon } from './icons';
 
 type Mode = 'choose' | 'camera';
 
@@ -65,7 +66,7 @@ export default function CameraScreen() {
         <div style={s.cards}>
           {/* Загрузить файл */}
           <label style={s.card}>
-            <span style={s.cardIcon}>🖼️</span>
+            <span style={s.cardIcon}><GalleryIcon className="icon-drift" /></span>
             <span style={s.cardLabel}>Загрузить фото</span>
             <span style={s.cardSub}>Выбрать из галереи или файлов</span>
             <input
@@ -78,7 +79,7 @@ export default function CameraScreen() {
 
           {/* Камера */}
           <button style={s.card} onClick={() => setMode('camera')}>
-            <span style={s.cardIcon}>📷</span>
+            <span style={s.cardIcon}><CameraIcon className="icon-drift" /></span>
             <span style={s.cardLabel}>Сделать снимок</span>
             <span style={s.cardSub}>Использовать камеру устройства</span>
           </button>
@@ -105,9 +106,9 @@ export default function CameraScreen() {
         <button
           onClick={handleCapture}
           disabled={!isCameraReady}
-          style={{ ...s.btn, opacity: isCameraReady ? 1 : 0.45 }}
+          style={{ ...s.btn, opacity: isCameraReady ? 1 : 0.45, display: 'inline-flex', alignItems: 'center', gap: 8 }}
         >
-          📸 Сделать фото
+          <ShutterIcon /> Сделать фото
         </button>
         <button
           onClick={() => setMode('choose')}
@@ -140,7 +141,7 @@ const s: Record<string, React.CSSProperties> = {
     color: '#fff', textAlign: 'center',
     transition: 'border-color .2s, background .2s',
   } as React.CSSProperties,
-  cardIcon: { fontSize: 40, marginBottom: 10 },
+  cardIcon: { display: 'inline-flex', marginBottom: 10 },
   cardLabel: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
   cardSub: { fontSize: 13, color: '#888' },
   error: { color: '#ff6666', marginBottom: 12 },

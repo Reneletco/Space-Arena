@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import type { BattleShip, ShotEvent } from '../types/battle';
 import { SHIP_STATS } from '../types/ships';
+import {
+  SwordsIcon, DiceIcon, HitIcon, ShieldIcon, MissIcon,
+  SkullIcon, TrophyIcon, HandshakeIcon, RestartIcon,
+  PlayIcon, PauseIcon, ChevronLeftIcon, ChevronRightIcon,
+} from './icons';
 
 const COLOR_HEX: Record<string, string> = {
   red: '#ff4444', blue: '#3399ff', green: '#33dd55', yellow: '#ffdd00',
@@ -13,9 +18,131 @@ const COLOR_RU: Record<string, string> = {
 const SHIELD_RU: Record<string, string> = {
   front: 'нос', rear: 'корма', left: 'левый борт', right: 'правый борт',
 };
-const RESULT_ICON: Record<string, string> = {
-  hit: '💥', blocked: '🛡️', miss: '〰️',
+const RESULT_ICON: Record<string, (key: string) => React.ReactNode> = {
+  hit:     key => <HitIcon key={key} className="icon-pop" />,
+  blocked: key => <ShieldIcon key={key} className="icon-pop" />,
+  miss:    key => <MissIcon key={key} className="icon-drift" />,
 };
+
+// ─── Силуэты корпусов кораблей ─────────────────────────────────────────────────
+
+/**
+ * Строит путь корпуса корабля в локальных координатах (нос направлен вдоль +X).
+ * Каждый тип корабля имеет свой характерный силуэт.
+ */
+function shipHullPath(ctx: CanvasRenderingContext2D, type: string, R: number) {
+  ctx.beginPath();
+  switch (type) {
+    case 'destroyer':
+      // Вытянутый корпус с боковыми пилонами
+      ctx.moveTo(R * 1.1, 0);
+      ctx.lineTo(R * 0.25, R * 0.5);
+      ctx.lineTo(-R * 0.45, R * 0.95);
+      ctx.lineTo(-R * 0.85, R * 0.35);
+      ctx.lineTo(-R * 0.65, 0);
+      ctx.lineTo(-R * 0.85, -R * 0.35);
+      ctx.lineTo(-R * 0.45, -R * 0.95);
+      ctx.lineTo(R * 0.25, -R * 0.5);
+      ctx.closePath();
+      break;
+    case 'interceptor':
+      // Узкий быстрый дельтаплан
+      ctx.moveTo(R * 1.35, 0);
+      ctx.lineTo(-R * 0.25, R * 0.32);
+      ctx.lineTo(-R * 0.05, 0);
+      ctx.lineTo(-R * 0.25, -R * 0.32);
+      ctx.closePath();
+      break;
+    case 'cruiser':
+      // Массивный шестиугольный корпус с широкими бортами
+      ctx.moveTo(R * 0.95, 0);
+      ctx.lineTo(R * 0.45, R * 0.6);
+      ctx.lineTo(-R * 0.35, R * 0.85);
+      ctx.lineTo(-R * 1.0, R * 0.5);
+      ctx.lineTo(-R * 1.0, -R * 0.5);
+      ctx.lineTo(-R * 0.35, -R * 0.85);
+      ctx.lineTo(R * 0.45, -R * 0.6);
+      ctx.closePath();
+      break;
+    case 'scout':
+    default:
+      // Маленький лёгкий клин с тонкими крыльями
+      ctx.moveTo(R * 1.25, 0);
+      ctx.lineTo(-R * 0.45, R * 0.5);
+      ctx.lineTo(-R * 0.15, 0);
+      ctx.lineTo(-R * 0.45, -R * 0.5);
+      ctx.closePath();
+      break;
+  }
+}
+
+/** Рисует деталь — кокпит у носа и двигатели у кормы — для всех типов кораблей. */
+function drawShipDetails(ctx: CanvasRenderingContext2D, type: string, R: number, color: string) {
+  // Кокпит
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.ellipse(R * 0.35, 0, R * 0.16, R * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Двигатели (1 для интерсептора/разведчика, 2 для разрушителя/крейсера)
+  const engineY = type === 'interceptor' || type === 'scout' ? [0] : [R * 0.32, -R * 0.32];
+  const rearX   = type === 'cruiser' ? -R * 0.95 : -R * 0.7;
+  for (const ey of engineY) {
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.9;
+    ctx.ellipse(rearX, ey, R * 0.14, R * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ─── Взрыв уничтоженного корабля ────────────────────────────────────────────────
+
+/**
+ * Рисует взрыв в координатах (cx, cy): расширяющееся огненное кольцо,
+ * белую вспышку в центре и разлетающиеся обломки-искры.
+ * progress 0..1 — прогресс взрыва от вспышки до полного затухания.
+ */
+function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, R: number, seed: number, progress: number) {
+  const p = Math.min(Math.max(progress, 0), 1);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Огненное кольцо, расширяется и тускнеет
+  const ringR = R * (0.4 + p * 2.2);
+  const ringGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, ringR);
+  ringGrad.addColorStop(0,   `rgba(255,235,180,${0.85 * (1 - p)})`);
+  ringGrad.addColorStop(0.5, `rgba(255,140,40,${0.6 * (1 - p)})`);
+  ringGrad.addColorStop(1,   'rgba(255,80,20,0)');
+  ctx.beginPath();
+  ctx.fillStyle = ringGrad;
+  ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Белая вспышка в самом начале взрыва
+  if (p < 0.4) {
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,255,255,${1 - p / 0.4})`;
+    ctx.arc(0, 0, R * 0.9 * (1 - p), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Обломки — искры, разлетающиеся по детерминированным направлениям
+  const PARTICLES = 10;
+  for (let i = 0; i < PARTICLES; i++) {
+    const ang  = (i / PARTICLES) * Math.PI * 2 + seed;
+    const dist = R * (0.6 + (i % 3) * 0.5) * p * 2;
+    const px   = Math.cos(ang) * dist;
+    const py   = Math.sin(ang) * dist;
+    ctx.beginPath();
+    ctx.fillStyle = i % 2 === 0 ? `rgba(255,200,120,${1 - p})` : `rgba(255,255,255,${1 - p})`;
+    ctx.arc(px, py, Math.max(1, R * 0.12 * (1 - p)), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
 
 // ─── Canvas renderer ──────────────────────────────────────────────────────────
 
@@ -117,6 +244,12 @@ function drawArena(
     }
   }
 
+  // Корабль, уничтоженный именно этим выстрелом — для него отдельно
+  // проигрывается анимация взрыва, прежде чем он станет обломком.
+  const justDestroyedId = (event && event.result === 'hit' && event.targetId && !event.aliveSnapshot[event.targetId])
+    ? event.targetId
+    : null;
+
   // Корабли
   const R = 22;
   for (const ship of ships) {
@@ -124,6 +257,9 @@ function drawArena(
     const color      = COLOR_HEX[ship.color];
     const isShooter  = event?.shooterId === ship.id;
     const isTarget   = event?.targetId  === ship.id;
+    const isExploding   = ship.id === justDestroyedId;
+    const explodeStart  = 0.8; // момент попадания луча — начало взрыва
+    const showAsAlive   = ship.alive || (isExploding && animPct < explodeStart);
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -134,26 +270,40 @@ function drawArena(
       ctx.shadowColor = color;
     }
 
-    // Тело корабля
-    ctx.fillStyle   = ship.alive ? color : '#333';
-    ctx.strokeStyle = ship.alive ? '#fff' : '#555';
-    ctx.lineWidth   = isShooter ? 2.5 : 1.5;
-    ctx.globalAlpha = ship.alive ? 1 : 0.35;
-
-    // Треугольник — нос корабля
+    // Корпус корабля — свой силуэт под каждый тип, с объёмным градиентом
     const rad = (ship.angle * Math.PI) / 180;
     ctx.rotate(rad);
-    ctx.beginPath();
-    ctx.moveTo( R,      0);       // нос
-    ctx.lineTo(-R * 0.6,  R * 0.65);
-    ctx.lineTo(-R * 0.6, -R * 0.65);
-    ctx.closePath();
+    ctx.globalAlpha = showAsAlive ? 1 : 0.35;
+
+    const hullGradient = ctx.createLinearGradient(-R, 0, R, 0);
+    if (showAsAlive) {
+      hullGradient.addColorStop(0, '#0a0a14');
+      hullGradient.addColorStop(0.55, color);
+      hullGradient.addColorStop(1, '#ffffff');
+    } else {
+      hullGradient.addColorStop(0, '#1a1a1a');
+      hullGradient.addColorStop(1, '#3a3a3a');
+    }
+
+    shipHullPath(ctx, ship.type, R);
+    ctx.fillStyle   = hullGradient;
+    ctx.strokeStyle = showAsAlive ? '#fff' : '#555';
+    ctx.lineWidth   = isShooter ? 2.5 : 1.5;
     ctx.fill();
     ctx.stroke();
+
+    if (showAsAlive) drawShipDetails(ctx, ship.type, R, color);
+
     ctx.restore();
 
+    // Взрыв — рисуется поверх корпуса, без поворота корабля
+    if (isExploding && animPct >= explodeStart) {
+      const seed = (ship.id.charCodeAt(0) || 1) * 0.7;
+      drawExplosion(ctx, cx, cy, R, seed, (animPct - explodeStart) / (1 - explodeStart));
+    }
+
     // HP бар
-    if (ship.alive) {
+    if (showAsAlive) {
       const barW = R * 2.2;
       const barH = 5;
       const bx   = cx - barW / 2;
@@ -165,14 +315,14 @@ function drawArena(
     }
 
     // Метка
-    ctx.fillStyle   = ship.alive ? '#fff' : '#666';
-    ctx.globalAlpha = ship.alive ? 1 : 0.4;
+    ctx.fillStyle   = showAsAlive ? '#fff' : '#666';
+    ctx.globalAlpha = showAsAlive ? 1 : 0.4;
     ctx.font        = 'bold 10px sans-serif';
     ctx.textAlign   = 'center';
     ctx.fillText(ship.label[0], cx, cy + R + 22); // первая буква типа
 
     // Щиты — маленькие точки вокруг корабля
-    if (ship.alive) {
+    if (showAsAlive) {
       const sideAngles = { front: ship.angle, rear: ship.angle + 180, left: ship.angle - 90, right: ship.angle + 90 };
       for (const [side, ang] of Object.entries(sideAngles)) {
         const active = ship.shields[side as keyof typeof ship.shields];
@@ -200,9 +350,9 @@ export default function ArenaScreen() {
 
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const [animPct, setAnimPct]     = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
   const animRef    = useRef<number>(0);
-  const playTimer  = useRef<ReturnType<typeof setTimeout>>();
+  const playTimer  = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Стартуем бой при маунте
   useEffect(() => {
@@ -257,10 +407,13 @@ export default function ArenaScreen() {
     prevEvent();
   };
 
-  // Авто-прокрутка
+  // Бой по умолчанию проигрывается сам по таймеру, но можно поставить на
+  // паузу и прокручивать ходы вручную кнопками ◀ / ▶.
   useEffect(() => {
-    if (!isPlaying) { clearTimeout(playTimer.current); return; }
+    if (!isBattleReady || !isPlaying) return;
+    let cancelled = false;
     const step = () => {
+      if (cancelled) return;
       const { currentEventIdx: idx, events: evs } = useGameStore.getState();
       if (idx >= evs.length - 1) { setIsPlaying(false); return; }
       cancelAnimationFrame(animRef.current);
@@ -268,9 +421,10 @@ export default function ArenaScreen() {
       useGameStore.getState().nextEvent();
       runAnim(() => { playTimer.current = setTimeout(step, 500); });
     };
-    playTimer.current = setTimeout(step, 300);
-    return () => clearTimeout(playTimer.current);
-  }, [isPlaying]); // eslint-disable-line
+    const initialDelay = currentEventIdx < 0 ? 1200 : 300;
+    playTimer.current = setTimeout(step, initialDelay);
+    return () => { cancelled = true; clearTimeout(playTimer.current); };
+  }, [isBattleReady, isPlaying]); // eslint-disable-line
 
   // ── Текущее событие ──────────────────────────────────────────────────────
   const ev = currentEventIdx >= 0 ? events[currentEventIdx] : null;
@@ -286,15 +440,16 @@ export default function ArenaScreen() {
     const tName = `${COLOR_RU[target.color]} ${target.label}`;
     if (ev.result === 'blocked') return `${sName} → ${tName}: щит (${SHIELD_RU[ev.shieldSide!]}) поглотил выстрел`;
     const hp = ev.hpSnapshot[target.id];
-    if (hp <= 0) return `${sName} → ${tName}: УНИЧТОЖЕН 💀`;
+    if (hp <= 0) return `${sName} → ${tName}: УНИЧТОЖЕН`;
     return `${sName} → ${tName}: попадание! HP ${hp + 1} → ${hp}`;
   })();
 
   const initiativePhase = currentEventIdx < 0;
+  const isDestroyed = !!(ev?.result === 'hit' && target && ev.hpSnapshot[target.id] <= 0);
 
   return (
     <div style={s.root}>
-      <h2 style={s.title}>⚔️ Арена</h2>
+      <h2 style={s.title}><SwordsIcon className="icon-drift" /> Арена</h2>
 
       {/* Canvas */}
       <canvas
@@ -306,7 +461,7 @@ export default function ArenaScreen() {
       {/* Фаза инициативы */}
       {initiativePhase && isBattleReady && (
         <div style={s.initiativeBox}>
-          <p style={s.initTitle}>🎲 Инициатива</p>
+          <p style={s.initTitle}><DiceIcon className="icon-pulse" /> Инициатива</p>
           {[...battleShips]
             .sort((a, b) => b.initiative - a.initiative)
             .map(ship => (
@@ -327,8 +482,11 @@ export default function ArenaScreen() {
       {/* Текущее событие */}
       {ev && (
         <div style={{ ...s.eventBox, borderColor: shooter ? COLOR_HEX[shooter.color] : '#334' }}>
-          <span style={s.eventIcon}>{RESULT_ICON[ev.result]}</span>
-          <span style={s.eventText}>{eventText}</span>
+          <span style={s.eventIcon}>{RESULT_ICON[ev.result](ev.result)}</span>
+          <span style={s.eventText}>
+            {eventText}
+            {isDestroyed && <SkullIcon className="icon-pop" />}
+          </span>
           <span style={s.eventStep}>Ход {currentEventIdx + 1} / {events.length}</span>
         </div>
       )}
@@ -337,27 +495,37 @@ export default function ArenaScreen() {
       {isLast && isBattleReady && (
         <div style={s.winnerBox}>
           {winner
-            ? <p style={{ color: COLOR_HEX[winner] }}>🏆 Победитель: {COLOR_RU[winner]}!</p>
-            : <p style={{ color: '#aaa' }}>🤝 Ничья!</p>
+            ? <p style={{ color: COLOR_HEX[winner], display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                <TrophyIcon className="icon-pop" /> Победитель: {COLOR_RU[winner]}!
+              </p>
+            : <p style={{ color: '#aaa', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                <HandshakeIcon className="icon-pop" /> Ничья!
+              </p>
           }
-          <button style={{ ...s.btn, background: '#334', marginTop: 8 }}
+          <button style={{ ...s.btn, background: '#334', marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 8 }}
             onClick={() => { useGameStore.getState().reset(); navigate('/'); }}>
-            🔄 Новый раунд
+            <RestartIcon /> Новый раунд
           </button>
         </div>
       )}
 
-      {/* Управление */}
+      {/* Управление ходами: автоматически по таймеру или вручную кнопками */}
       <div style={s.controls}>
-        <button style={s.btn} onClick={goPrev} disabled={currentEventIdx < 0}>◀</button>
+        <button style={s.btn} onClick={goPrev} disabled={currentEventIdx < 0}>
+          <ChevronLeftIcon />
+        </button>
         <button
           style={{ ...s.btn, background: isPlaying ? '#883' : 'linear-gradient(135deg,#6644ff,#aa44ff)', minWidth: 110 }}
           onClick={() => setIsPlaying(p => !p)}
           disabled={isLast}
         >
-          {isPlaying ? '⏸ Пауза' : '▶ Авто'}
+          {isPlaying
+            ? <span style={s.btnInline}><PauseIcon /> Пауза</span>
+            : <span style={s.btnInline}><PlayIcon /> Авто</span>}
         </button>
-        <button style={s.btn} onClick={goNext} disabled={isLast}>▶</button>
+        <button style={s.btn} onClick={goNext} disabled={isLast}>
+          <ChevronRightIcon />
+        </button>
       </div>
 
       {/* Список кораблей */}
@@ -374,7 +542,7 @@ export default function ArenaScreen() {
               <span style={{ color: COLOR_HEX[ship.color] }}>■</span>
               &nbsp;{COLOR_RU[ship.color]} {ship.label}
               <span style={s.hpText}> HP {hp}/{ship.maxHp}</span>
-              {!alive && <span style={{ color: '#ff4444' }}> 💀</span>}
+              {!alive && <SkullIcon size={14} className="icon-pop" />}
             </div>
           );
         })}
@@ -391,7 +559,10 @@ const s: Record<string, React.CSSProperties> = {
     padding: '12px 16px', minHeight: '100dvh', boxSizing: 'border-box',
     background: '#0d0d1a', color: '#fff',
   },
-  title: { margin: '0 0 10px', fontSize: 22, letterSpacing: 1 },
+  title: {
+    margin: '0 0 10px', fontSize: 22, letterSpacing: 1,
+    display: 'flex', alignItems: 'center', gap: 8,
+  },
   canvas: {
     width: '100%', maxWidth: 480, borderRadius: 12,
     border: '2px solid #223', display: 'block',
@@ -401,7 +572,10 @@ const s: Record<string, React.CSSProperties> = {
     background: '#12122a', borderRadius: 10, padding: '10px 14px',
     border: '1px solid #334',
   },
-  initTitle: { margin: '0 0 6px', fontWeight: 700, color: '#aaa', fontSize: 13 },
+  initTitle: {
+    margin: '0 0 6px', fontWeight: 700, color: '#aaa', fontSize: 13,
+    display: 'flex', alignItems: 'center', gap: 6,
+  },
   initRow: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '3px 0', fontSize: 14,
@@ -413,8 +587,8 @@ const s: Record<string, React.CSSProperties> = {
     padding: '10px 14px', border: '2px solid',
     display: 'flex', alignItems: 'center', gap: 8,
   },
-  eventIcon: { fontSize: 22, flexShrink: 0 },
-  eventText: { flex: 1, fontSize: 14, lineHeight: '1.4' },
+  eventIcon: { flexShrink: 0, display: 'flex' },
+  eventText: { flex: 1, fontSize: 14, lineHeight: '1.4', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   eventStep: { color: '#556', fontSize: 12, flexShrink: 0 },
   winnerBox: {
     marginTop: 10, textAlign: 'center', fontSize: 20, fontWeight: 700,
@@ -427,7 +601,9 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 9, border: 'none', cursor: 'pointer',
     background: '#223', color: '#fff',
     transition: 'opacity .15s',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   },
+  btnInline: { display: 'inline-flex', alignItems: 'center', gap: 8 },
   shipList: {
     marginTop: 12, width: '100%', maxWidth: 480,
     display: 'flex', flexWrap: 'wrap', gap: 7,
@@ -435,6 +611,7 @@ const s: Record<string, React.CSSProperties> = {
   shipChip: {
     padding: '5px 11px', borderRadius: 8, border: '2px solid',
     fontSize: 13, background: '#15152a', transition: 'opacity .3s',
+    display: 'inline-flex', alignItems: 'center', gap: 4,
   },
   hpText: { color: '#aaa', fontSize: 12 },
 };

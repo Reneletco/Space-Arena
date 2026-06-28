@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
+import { TrophyIcon, HandshakeIcon, RestartIcon } from './icons';
 
 const COLOR_HEX: Record<string, string> = {
   red: '#ff4444', blue: '#3399ff', green: '#33dd55', yellow: '#ffdd00',
@@ -20,7 +21,7 @@ export default function ResultScreen() {
       {winner ? (
         <>
           <div style={{ ...s.badge, background: COLOR_HEX[winner] + '22', border: `3px solid ${COLOR_HEX[winner]}` }}>
-            <span style={{ fontSize: 52 }}>🏆</span>
+            <TrophyIcon size={52} className="icon-pop" />
             <p style={{ color: COLOR_HEX[winner], fontSize: 26, fontWeight: 800, margin: '8px 0 0' }}>
               {COLOR_RU[winner]}
             </p>
@@ -29,11 +30,13 @@ export default function ResultScreen() {
         </>
       ) : (
         <div style={{ ...s.badge, border: '3px solid #556' }}>
-          <span style={{ fontSize: 52 }}>🤝</span>
+          <HandshakeIcon size={52} className="icon-pop" />
           <p style={{ color: '#ccc', fontSize: 22, fontWeight: 700, margin: '8px 0 0' }}>Ничья</p>
         </div>
       )}
-      <button style={s.btn} onClick={handleNew}>🔄 Новый раунд</button>
+      <button style={{ ...s.btn, display: 'inline-flex', alignItems: 'center', gap: 10 }} onClick={handleNew}>
+        <RestartIcon /> Новый раунд
+      </button>
     </div>
   );
 }
