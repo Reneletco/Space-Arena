@@ -1,75 +1,98 @@
-# React + TypeScript + Vite
+# Space Arena
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Веб-приложение — цифровой компаньон для настольной игры. Игроки расставляют физические фигурки кораблей на столе, фотографируют стол, приложение распознаёт позиции и ориентацию каждого корабля и проводит пошаговый бой с анимацией.
 
-Currently, two official plugins are available:
+## Как играть
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Откройте приложение на телефоне или планшете.
+2. Сфотографируйте стол с расставленными фигурками (кнопка "Сделать снимок") или загрузите уже готовое фото из галереи.
+3. Приложение автоматически распознает корабли по цвету, определит их позиции и направление носа.
+4. На экране редактирования при необходимости скорректируйте расстановку вручную: перетащите корабль (позиция) или потяните белую ручку на конце стрелки (поворот). Здесь же можно добавить или удалить корабли.
+5. Нажмите "В бой!" — приложение бросит кости инициативы, рассчитает все выстрелы и покажет пошаговую анимацию боя.
+6. Прокручивайте ходы вручную кнопками или включите автоматическое воспроизведение.
+7. По окончании нажмите "Новый раунд" и начните заново.
 
-## React Compiler
+## Требования к фигуркам
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Детектор работает по цветовым пятнам в HSV, без машинного обучения. Чтобы распознавание работало корректно:
 
-## Expanding the ESLint configuration
+- Фигурки должны быть окрашены в один из четырёх поддерживаемых цветов: красный, синий, зелёный, жёлтый. Пастельные и тёмные оттенки могут не распознаться.
+- Фон стола должен быть нейтральным (серый, белый, чёрный) и не совпадать по оттенку ни с одним из цветов.
+- Тип корабля определяется по относительному размеру фигурки внутри одного цвета: самая большая — крейсер, следующая — разрушитель, далее перехватчик и разведчик.
+- Направление носа вычисляется через PCA главных компонент пикселей пятна: работает корректно только для вытянутых фигурок.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Если автоматическое распознавание дало неверный результат, воспользуйтесь экраном редактирования.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Правила боя
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Корабли
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Тип          | HP | Бонус инициативы |
+|--------------|----|-----------------|
+| Крейсер      | 3  | +0              |
+| Разрушитель  | 2  | +3              |
+| Перехватчик  | 1  | +5              |
+| Разведчик    | 1  | +7              |
 
+### Инициатива
+
+Перед боем каждый корабль бросает d10 и прибавляет бонус типа. Корабли стреляют по убыванию результата. При равенстве порядок произвольный.
+
+### Выстрел
+
+Лазер выпускается из носа корабля по прямой. Поражает первый корабль на линии огня. Корабль не может попасть сам в себя. Если на линии огня никого нет — промах.
+
+### Щиты
+
+У каждого корабля четыре щита по сторонам (нос, корма, левый борт, правый борт). Если выстрел приходит со стороны, где щит активен, щит поглощает выстрел и отключается. Следующий выстрел с той же стороны наносит урон.
+
+### Победа
+
+Бой идёт раундами пока не останется один цвет выживших. Если живых нет или выжили корабли разных цветов — ничья.
+
+## Стек
+
+- React 19, TypeScript, Vite
+- Zustand — управление состоянием
+- React Router — навигация между экранами
+- Canvas 2D API — анимация арены и редактор расстановки
+- WebRTC getUserMedia — доступ к камере устройства
+
+## Установка и запуск
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Откройте `http://localhost:5173` в браузере.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Для сборки:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+```
 
+## Структура проекта
+
+```
+src/
+  components/
+    CameraScreen.tsx        # Экран захвата изображения
+    RecognitionScreen.tsx   # Результаты распознавания
+    EditScreen.tsx          # Ручная корректировка расстановки
+    ArenaScreen.tsx         # Анимация боя
+    ResultScreen.tsx        # Итоговый экран
+  recognition/
+    colorDetector.ts        # HSV blob-детектор кораблей
+    drawOverlay.ts          # Отрисовка bounding-box поверх фото
+  battle/
+    battleEngine.ts         # Движок боя: инициатива, линия огня, щиты, урон
+  store/
+    gameStore.ts            # Глобальное состояние (Zustand)
+  types/
+    ships.ts                # Типы DetectedShip, HSV-диапазоны, статы
+    battle.ts               # Типы BattleShip, ShotEvent
+  hooks/
+    useCamera.ts            # Хук для работы с WebRTC-камерой
 ```
