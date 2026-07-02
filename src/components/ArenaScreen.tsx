@@ -186,15 +186,25 @@ function drawArena(
     cy: (y - minY) * scale + pad + (H - pad * 2 - (maxY - minY) * scale) / 2,
   });
 
-  // Лазерный луч
+  // Лазерный луч — ВСЕГДА строго вдоль носа стрелка (никакой автонаводки),
+  // до точки поражения = проекции цели на линию огня. Так нарисованный луч
+  // совпадает с тем, что реально посчитал движок.
   if (event && event.result !== 'miss' && event.targetId && animPct > 0) {
     const shooter = ships.find(s => s.id === event.shooterId);
     const target  = ships.find(s => s.id === event.targetId);
     if (shooter && target) {
+      const rad = (shooter.angle * Math.PI) / 180;
+      const dx  = Math.cos(rad);
+      const dy  = Math.sin(rad);
+      // Точка попадания на линии огня (в координатах фото)
+      const proj    = (target.x - shooter.x) * dx + (target.y - shooter.y) * dy;
+      const impactX = shooter.x + dx * proj;
+      const impactY = shooter.y + dy * proj;
+
       const sp = toCanvas(shooter.x, shooter.y);
-      const tp = toCanvas(target.x,  target.y);
-      const ex = sp.cx + (tp.cx - sp.cx) * Math.min(animPct * 1.2, 1);
-      const ey = sp.cy + (tp.cy - sp.cy) * Math.min(animPct * 1.2, 1);
+      const ip = toCanvas(impactX, impactY);
+      const ex = sp.cx + (ip.cx - sp.cx) * Math.min(animPct * 1.2, 1);
+      const ey = sp.cy + (ip.cy - sp.cy) * Math.min(animPct * 1.2, 1);
 
       const color = COLOR_HEX[shooter.color];
       ctx.save();
@@ -208,13 +218,13 @@ function drawArena(
       ctx.lineTo(ex, ey);
       ctx.stroke();
 
-      // Вспышка при попадании
+      // Вспышка в точке поражения
       if (animPct > 0.85 && event.result === 'hit') {
         const flash = (animPct - 0.85) / 0.15;
         ctx.globalAlpha = flash;
         ctx.fillStyle   = '#ffffff';
         ctx.beginPath();
-        ctx.arc(tp.cx, tp.cy, 18 * flash, 0, Math.PI * 2);
+        ctx.arc(ip.cx, ip.cy, 18 * flash, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -251,9 +261,12 @@ function drawArena(
     : null;
 
   // Корабли
-  const R = 22;
   for (const ship of ships) {
     const { cx, cy } = toCanvas(ship.x, ship.y);
+    // Размер корпуса на канвасе = реальный радиус корабля в том же масштабе,
+    // что и позиции. Тогда нарисованный корпус совпадает с зоной попадания,
+    // которую считает движок (perp ≤ radius) — «луч сквозь корпус» = попадание.
+    const R          = Math.max(ship.radius * scale, 10);
     const color      = COLOR_HEX[ship.color];
     const isShooter  = event?.shooterId === ship.id;
     const isTarget   = event?.targetId  === ship.id;
