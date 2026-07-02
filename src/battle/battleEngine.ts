@@ -5,6 +5,14 @@
  *  - начальный массив BattleShip[]
  *  - список ShotEvent[] (весь бой просчитан заранее)
  *  - winner: ShipColor | null
+ *
+ * Правила боя:
+ *  - Цвет корабля = команда. Одноцветные корабли — союзники и НЕ стреляют
+ *    друг в друга.
+ *  - Корабль стреляет строго вперёд по направлению своего носа. Попадание
+ *    засчитывается, только если вражеский корабль реально стоит на линии
+ *    огня — луч проходит в пределах корпуса цели. Если впереди никого нет —
+ *    это промах, корабль не «доворачивает» на врага.
  */
 
 import type { DetectedShip } from '../types/ships';
@@ -41,6 +49,11 @@ export function hitSide(
   return diff > 0 ? 'right' : 'left';
 }
 
+/** Радиус корпуса корабля в пикселях фото — половина среднего размера рамки */
+function shipRadius(d: DetectedShip): number {
+  return Math.max((d.bbox.w + d.bbox.h) / 4, 1);
+}
+
 // ─── Инициатива ───────────────────────────────────────────────────────────────
 
 /**
@@ -59,6 +72,7 @@ export function buildBattleShips(detected: DetectedShip[]): BattleShip[] {
       x:          d.cx,
       y:          d.cy,
       angle:      d.angle,
+      radius:     shipRadius(d),
       hp:         stats.hp,
       maxHp:      stats.hp,
       initiative: roll + stats.initiativeBonus,
@@ -76,28 +90,32 @@ export function getFiringOrder(ships: BattleShip[]): BattleShip[] {
 // ─── Линия огня ───────────────────────────────────────────────────────────────
 
 /**
- * Радиус попадания по умолчанию. Координаты кораблей могут быть как
- * нормализованными (0..1), так и пиксельными (с реального фото) — поэтому
- * вызывающая сторона (simulateBattle) обычно передаёт радиус, рассчитанный
- * от реального размера кораблей на конкретном фото.
- */
-const DEFAULT_HIT_RADIUS = 0.06;
-
-/**
- * Находит ближайший живой корабль на линии огня стрелка
- * (луч из носа стрелка в направлении его угла, до бесконечности).
- * Возвращает null, если на линии огня никого нет — это промах.
+ * Определяет, во что попадёт лазер стрелка — луч из носа стрелка в направлении
+ * его угла. Никакой «автонаводки»: цель — это ПЕРВЫЙ корабль на пути луча.
+ *
+ * Луч останавливает первый же корабль, чей корпус он пересекает (любого цвета):
+ *  - если этот корабль впереди (проекция на луч > 0),
+ *  - и луч проходит в пределах его корпуса (перпендикуляр ≤ радиус корабля).
+ *
+ * Затем:
+ *  - если первый на пути — враг, это попадание, возвращаем его;
+ *  - если первый на пути — союзник, стрелять сквозь него нельзя: выстрел
+ *    уходит впустую, возвращаем null (промах);
+ *  - если на линии огня вообще никого нет — тоже null (промах).
+ *
+ * Так корабль не «простреливает» стоящих впереди и не бьёт дальнюю цель,
+ * в которую физически не смотрит.
  */
 export function findTarget(
   shooter: BattleShip,
   ships: BattleShip[],
-  hitRadius: number = DEFAULT_HIT_RADIUS,
 ): BattleShip | null {
   const rad = (shooter.angle * Math.PI) / 180;
   const dx  = Math.cos(rad);
   const dy  = Math.sin(rad);
 
-  let best: BattleShip | null = null;
+  // Ищем ПЕРВЫЙ корабль на пути луча — независимо от цвета
+  let first: BattleShip | null = null;
   let bestDist = Infinity;
 
   for (const ship of ships) {
@@ -107,21 +125,24 @@ export function findTarget(
     const ex = ship.x - shooter.x;
     const ey = ship.y - shooter.y;
 
-    // Проекция на направление луча: если <= 0, цель позади стрелка
+    // Проекция на направление луча: если <= 0, корабль позади стрелка
     const proj = ex * dx + ey * dy;
     if (proj <= 0) continue;
 
-    // Перпендикулярное расстояние цели от линии луча
+    // Перпендикулярное расстояние от линии луча — луч должен пройти сквозь
+    // корпус корабля, иначе он не на линии огня
     const perp = Math.abs(ex * dy - ey * dx);
-    if (perp > hitRadius) continue;
+    if (perp > ship.radius) continue;
 
     if (proj < bestDist) {
       bestDist = proj;
-      best = ship;
+      first = ship;
     }
   }
 
-  return best;
+  // Стреляем только если первый на пути — враг; союзник впереди блокирует луч
+  if (!first || first.color === shooter.color) return null;
+  return first;
 }
 
 // ─── Щиты и урон ──────────────────────────────────────────────────────────────
@@ -162,7 +183,7 @@ export interface BattleResult {
   winner: string | null;
 }
 
-/** Сколько живых цветов осталось на арене */
+/** Сколько живых цветов (команд) осталось на арене */
 function aliveColorCount(ships: BattleShip[]): number {
   return new Set(ships.filter(s => s.alive).map(s => s.color)).size;
 }
@@ -171,30 +192,16 @@ function aliveColorCount(ships: BattleShip[]): number {
 const MAX_ROUNDS = 50;
 
 /**
- * Радиус попадания должен соответствовать реальному масштабу координат:
- * для кораблей, найденных на фото, координаты — в пикселях, а не 0..1.
- * Берём средний размер найденного корабля как «радиус» его корпуса —
- * луч засчитывает попадание, если проходит в пределах этого расстояния
- * от центра цели.
- */
-function computeHitRadius(detected: DetectedShip[]): number {
-  if (!detected.length) return 0.06;
-  const avgSize = detected.reduce((sum, d) => sum + (d.bbox.w + d.bbox.h) / 2, 0) / detected.length;
-  return Math.max(avgSize * 0.6, 1);
-}
-
-/**
  * Прогоняет весь бой раундами (каждый раунд — все живые корабли стреляют
  * в порядке убывания инициативы) до тех пор, пока не останется один цвет
  * выживших или раунд не проходит без единого попадания/блока (стрелять
- * больше не во кого/нечем — щиты исчерпаны, цели нет на линии огня).
+ * больше не во кого/нечем — цели нет на линии огня).
  * Возвращает итоговые корабли, лог всех выстрелов (со снимками HP/alive
  * после каждого хода) и победителя.
  */
 export function simulateBattle(detected: DetectedShip[]): BattleResult {
   const ships = buildBattleShips(detected);
   const order = getFiringOrder(ships);
-  const hitRadius = computeHitRadius(detected);
   const events: ShotEvent[] = [];
 
   for (let round = 0; round < MAX_ROUNDS && aliveColorCount(ships) > 1; round++) {
@@ -204,7 +211,7 @@ export function simulateBattle(detected: DetectedShip[]): BattleResult {
       if (!shooter.alive) continue;
       if (aliveColorCount(ships) <= 1) break;
 
-      const target = findTarget(shooter, ships, hitRadius);
+      const target = findTarget(shooter, ships);
       let result: ShotResult = 'miss';
       let shieldSide: ShotEvent['shieldSide'];
 
@@ -236,7 +243,7 @@ export function simulateBattle(detected: DetectedShip[]): BattleResult {
     if (!progressed) break; // стрелять больше не во кого — дальше ничего не изменится
   }
 
-  const survivors    = ships.filter(s => s.alive);
+  const survivors      = ships.filter(s => s.alive);
   const survivorColors = [...new Set(survivors.map(s => s.color))];
   const winner = survivorColors.length === 1 ? survivorColors[0] : null;
 

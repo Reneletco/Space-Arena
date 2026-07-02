@@ -12,6 +12,8 @@ export interface BattleShip {
   y: number;
   /** Угол носа в градусах (0 = вправо, по часовой) */
   angle: number;
+  /** Радиус корпуса в пикселях фото — по нему засчитывается попадание луча */
+  radius: number;
   hp: number;
   maxHp: number;
   initiative: number;
