@@ -1,18 +1,18 @@
 import type { ShipColor, ShipType } from './ships';
 
-// ─── Боевой корабль (runtime-состояние) ──────────────────────────────────────
+// ─── Корабль во время боя ─────────────────────────────────────────────────────
 
 export interface BattleShip {
   id: string;
   color: ShipColor;
   type: ShipType;
   label: string;
-  /** Позиция на арене (нормализована 0-1 от размеров исходного фото) */
+  // где стоит на фото, в пикселях
   x: number;
   y: number;
-  /** Угол носа в градусах (0 = вправо, по часовой) */
+  // куда смотрит нос, градусы (0 = вправо, дальше по часовой)
   angle: number;
-  /** Радиус корпуса в пикселях фото — по нему засчитывается попадание луча */
+  // радиус корпуса в пикселях — по нему решаем, попал луч или нет
   radius: number;
   hp: number;
   maxHp: number;
@@ -21,20 +21,19 @@ export interface BattleShip {
   alive: boolean;
 }
 
-// ─── Один ход (выстрел) ───────────────────────────────────────────────────────
+// ─── Один выстрел ─────────────────────────────────────────────────────────────
 
 export type ShotResult = 'hit' | 'blocked' | 'miss';
 
 export interface ShotEvent {
   shooterId: string;
-  targetId: string | null;   // null = промах
+  targetId: string | null;   // null — промах
   result: ShotResult;
-  /** Какой щит заблокировал (если result === 'blocked') */
+  // какой борт поймал щитом (когда 'blocked')
   shieldSide?: 'front' | 'rear' | 'left' | 'right';
-  /** Снимок HP всех кораблей ПОСЛЕ этого хода */
+  // как выглядели HP и живые сразу после этого хода — нужно для перемотки
   hpSnapshot: Record<string, number>;
-  /** Снимок alive ПОСЛЕ этого хода */
   aliveSnapshot: Record<string, boolean>;
-  /** d10 результат броска инициативы стрелка */
+  // с какой инициативой стрелял
   initiativeRoll: number;
 }

@@ -16,8 +16,8 @@ let nextShipSeq = 1;
 type DragMode = 'move' | 'rotate';
 interface DragState { id: string; mode: DragMode; offsetX: number; offsetY: number }
 
-/** Рисует фото стола и наложение: рамки кораблей, стрелку направления и
- * ручку поворота. Выбранный корабль подсвечивается толстой обводкой. */
+// Рисуем фото стола, а поверх — рамки кораблей, стрелку носа и ручку поворота.
+// Выбранный корабль обводим потолще.
 function drawEditOverlay(
   canvas: HTMLCanvasElement,
   img: HTMLImageElement,
@@ -49,7 +49,7 @@ function drawEditOverlay(
     ctx.fillStyle = '#000';
     ctx.fillText(label, x + 4, y - 4);
 
-    // Стрелка направления носа + ручка поворота на её конце
+    // стрелка носа, а на её кончике — ручка, за которую крутим
     const cx  = x + w / 2;
     const cy  = y + h / 2;
     const len = Math.min(w, h) * 0.55;
@@ -93,7 +93,7 @@ export default function EditScreen() {
   const [newType, setNewType]     = useState<ShipType>('destroyer');
   const [newColor, setNewColor]   = useState<ShipColor>('red');
 
-  // Загружаем фото один раз
+  // грузим фото один раз при заходе; нет фото — уходим на старт
   useEffect(() => {
     if (!rawImage) { navigate('/'); return; }
     setLocalShips(detected);
@@ -102,7 +102,7 @@ export default function EditScreen() {
     img.src = rawImage;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Перерисовка при любом изменении расстановки или выбора
+  // перерисовываем, как только что-то поменяли или выбрали другой корабль
   useEffect(() => {
     if (!imgReady || !canvasRef.current || !imgRef.current) return;
     drawEditOverlay(canvasRef.current, imgRef.current, ships, selectedId);
@@ -120,7 +120,7 @@ export default function EditScreen() {
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const { x, y } = toImageCoords(e);
 
-    // Сначала проверяем ручку поворота уже выбранного корабля
+    // сперва смотрим, не попали ли по ручке поворота выбранного корабля
     const selected = ships.find(sh => sh.id === selectedId);
     if (selected) {
       const cx  = selected.bbox.x + selected.bbox.w / 2;
@@ -136,7 +136,7 @@ export default function EditScreen() {
       }
     }
 
-    // Иначе ищем корабль под курсором (сверху вниз по порядку отрисовки)
+    // иначе ищем корабль под пальцем — сверху вниз, чтобы взять верхний
     for (let i = ships.length - 1; i >= 0; i--) {
       const ship = ships[i];
       const { x: bx, y: by, w, h } = ship.bbox;
@@ -211,7 +211,7 @@ export default function EditScreen() {
     if (selectedId === id) setSelected(null);
   };
 
-  // ── Правка выбранного корабля ────────────────────────────────────────────
+  // ── меню правки выбранного корабля ──────────────────────────────────────
   const selectedShip = ships.find(sh => sh.id === selectedId) ?? null;
   const displayAngle = selectedShip
     ? Math.round(((selectedShip.angle % 360) + 360) % 360)

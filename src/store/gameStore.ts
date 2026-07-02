@@ -7,14 +7,14 @@ interface GameState {
   rawImage:         string | null;
   detectedShips:    DetectedShip[];
 
-  // Battle runtime
+  // состояние боя
   battleShips:      BattleShip[];
   events:           ShotEvent[];
   currentEventIdx:  number;
   winner:           string | null;
   isBattleReady:    boolean;
 
-  // Actions
+  // действия
   setImage:         (image: string) => void;
   setShips:         (ships: DetectedShip[]) => void;
   updateShip:       (id: string, patch: Partial<DetectedShip>) => void;
@@ -31,7 +31,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   detectedShips:   [],
   battleShips:     [],
   events:          [],
-  currentEventIdx: -1,  // -1 = фаза инициативы (до первого выстрела)
+  currentEventIdx: -1,  // -1 — ещё показываем инициативу, до первого выстрела
   winner:          null,
   isBattleReady:   false,
 

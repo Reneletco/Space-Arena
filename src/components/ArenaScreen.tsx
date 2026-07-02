@@ -24,17 +24,14 @@ const RESULT_ICON: Record<string, (key: string) => React.ReactNode> = {
   miss:    key => <MissIcon key={key} className="icon-drift" />,
 };
 
-// ─── Силуэты корпусов кораблей ─────────────────────────────────────────────────
+// ─── Силуэты кораблей ─────────────────────────────────────────────────────────
 
-/**
- * Строит путь корпуса корабля в локальных координатах (нос направлен вдоль +X).
- * Каждый тип корабля имеет свой характерный силуэт.
- */
+// Рисуем контур корабля, нос смотрит вправо (вдоль +X). У каждого типа свой силуэт.
 function shipHullPath(ctx: CanvasRenderingContext2D, type: string, R: number) {
   ctx.beginPath();
   switch (type) {
     case 'destroyer':
-      // Вытянутый корпус с боковыми пилонами
+      // длинный корпус с пилонами по бокам
       ctx.moveTo(R * 1.1, 0);
       ctx.lineTo(R * 0.25, R * 0.5);
       ctx.lineTo(-R * 0.45, R * 0.95);
@@ -46,7 +43,7 @@ function shipHullPath(ctx: CanvasRenderingContext2D, type: string, R: number) {
       ctx.closePath();
       break;
     case 'interceptor':
-      // Узкий быстрый дельтаплан
+      // узкая быстрая стрелка
       ctx.moveTo(R * 1.35, 0);
       ctx.lineTo(-R * 0.25, R * 0.32);
       ctx.lineTo(-R * 0.05, 0);
@@ -54,7 +51,7 @@ function shipHullPath(ctx: CanvasRenderingContext2D, type: string, R: number) {
       ctx.closePath();
       break;
     case 'cruiser':
-      // Массивный шестиугольный корпус с широкими бортами
+      // тяжёлый широкий корпус
       ctx.moveTo(R * 0.95, 0);
       ctx.lineTo(R * 0.45, R * 0.6);
       ctx.lineTo(-R * 0.35, R * 0.85);
@@ -66,7 +63,7 @@ function shipHullPath(ctx: CanvasRenderingContext2D, type: string, R: number) {
       break;
     case 'scout':
     default:
-      // Маленький лёгкий клин с тонкими крыльями
+      // маленький лёгкий клин
       ctx.moveTo(R * 1.25, 0);
       ctx.lineTo(-R * 0.45, R * 0.5);
       ctx.lineTo(-R * 0.15, 0);
@@ -76,15 +73,15 @@ function shipHullPath(ctx: CanvasRenderingContext2D, type: string, R: number) {
   }
 }
 
-/** Рисует деталь — кокпит у носа и двигатели у кормы — для всех типов кораблей. */
+// Кокпит у носа и двигатели у кормы — чтобы кораблик не был просто пятном
 function drawShipDetails(ctx: CanvasRenderingContext2D, type: string, R: number, color: string) {
-  // Кокпит
+  // кокпит
   ctx.beginPath();
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.ellipse(R * 0.35, 0, R * 0.16, R * 0.1, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Двигатели (1 для интерсептора/разведчика, 2 для разрушителя/крейсера)
+  // двигатели: у мелких один, у крупных два
   const engineY = type === 'interceptor' || type === 'scout' ? [0] : [R * 0.32, -R * 0.32];
   const rearX   = type === 'cruiser' ? -R * 0.95 : -R * 0.7;
   for (const ey of engineY) {
@@ -96,20 +93,17 @@ function drawShipDetails(ctx: CanvasRenderingContext2D, type: string, R: number,
   }
 }
 
-// ─── Взрыв уничтоженного корабля ────────────────────────────────────────────────
+// ─── Взрыв ────────────────────────────────────────────────────────────────────
 
-/**
- * Рисует взрыв в координатах (cx, cy): расширяющееся огненное кольцо,
- * белую вспышку в центре и разлетающиеся обломки-искры.
- * progress 0..1 — прогресс взрыва от вспышки до полного затухания.
- */
+// Взрыв в точке (cx, cy): огненное кольцо + вспышка + разлетающиеся искры.
+// progress идёт 0..1 — от вспышки до полного затухания.
 function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, R: number, seed: number, progress: number) {
   const p = Math.min(Math.max(progress, 0), 1);
 
   ctx.save();
   ctx.translate(cx, cy);
 
-  // Огненное кольцо, расширяется и тускнеет
+  // кольцо огня — растёт и гаснет
   const ringR = R * (0.4 + p * 2.2);
   const ringGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, ringR);
   ringGrad.addColorStop(0,   `rgba(255,235,180,${0.85 * (1 - p)})`);
@@ -120,7 +114,7 @@ function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, R:
   ctx.arc(0, 0, ringR, 0, Math.PI * 2);
   ctx.fill();
 
-  // Белая вспышка в самом начале взрыва
+  // яркая вспышка в первый момент
   if (p < 0.4) {
     ctx.beginPath();
     ctx.fillStyle = `rgba(255,255,255,${1 - p / 0.4})`;
@@ -128,7 +122,7 @@ function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, R:
     ctx.fill();
   }
 
-  // Обломки — искры, разлетающиеся по детерминированным направлениям
+  // искры-обломки разлетаются в стороны
   const PARTICLES = 10;
   for (let i = 0; i < PARTICLES; i++) {
     const ang  = (i / PARTICLES) * Math.PI * 2 + seed;
@@ -150,18 +144,18 @@ function drawArena(
   canvas: HTMLCanvasElement,
   ships: BattleShip[],
   event: ShotEvent | null,
-  animPct: number,         // 0..1 прогресс анимации луча
+  animPct: number,         // 0..1 — насколько «долетел» луч
 ) {
   const W = canvas.width;
   const H = canvas.height;
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, W, H);
 
-  // Фон
+  // фон
   ctx.fillStyle = '#0a0a1a';
   ctx.fillRect(0, 0, W, H);
 
-  // Звёзды (псевдорандом по canvas размеру)
+  // звёзды — разбросаны по простой формуле, чтобы не прыгали между кадрами
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   for (let i = 0; i < 60; i++) {
     const sx = ((i * 137 + 11) % W);
@@ -169,7 +163,7 @@ function drawArena(
     ctx.fillRect(sx, sy, 1, 1);
   }
 
-  // Найдём bounding box кораблей чтобы хорошо вписать в canvas
+  // вписываем всех кораблей в канвас: считаем их габариты и общий масштаб
   if (!ships.length) return;
   const xs = ships.map(s => s.x);
   const ys = ships.map(s => s.y);
@@ -186,9 +180,9 @@ function drawArena(
     cy: (y - minY) * scale + pad + (H - pad * 2 - (maxY - minY) * scale) / 2,
   });
 
-  // Лазерный луч — ВСЕГДА строго вдоль носа стрелка (никакой автонаводки),
-  // до точки поражения = проекции цели на линию огня. Так нарисованный луч
-  // совпадает с тем, что реально посчитал движок.
+  // Луч всегда идёт прямо из носа стрелка (не доворачиваем на цель) и
+  // останавливается там, где враг ближе всего к линии огня. Так картинка
+  // ровно совпадает с тем, что решил движок.
   if (event && event.result !== 'miss' && event.targetId && animPct > 0) {
     const shooter = ships.find(s => s.id === event.shooterId);
     const target  = ships.find(s => s.id === event.targetId);
@@ -196,7 +190,7 @@ function drawArena(
       const rad = (shooter.angle * Math.PI) / 180;
       const dx  = Math.cos(rad);
       const dy  = Math.sin(rad);
-      // Точка попадания на линии огня (в координатах фото)
+      // куда упирается луч (в пикселях фото)
       const proj    = (target.x - shooter.x) * dx + (target.y - shooter.y) * dy;
       const impactX = shooter.x + dx * proj;
       const impactY = shooter.y + dy * proj;
@@ -218,7 +212,7 @@ function drawArena(
       ctx.lineTo(ex, ey);
       ctx.stroke();
 
-      // Вспышка в точке поражения
+      // вспышка в точке попадания
       if (animPct > 0.85 && event.result === 'hit') {
         const flash = (animPct - 0.85) / 0.15;
         ctx.globalAlpha = flash;
@@ -231,7 +225,7 @@ function drawArena(
     }
   }
 
-  // Промах — луч уходит в бесконечность
+  // промах — луч просто улетает вдаль
   if (event && event.result === 'miss' && animPct > 0) {
     const shooter = ships.find(s => s.id === event.shooterId);
     if (shooter) {
@@ -254,36 +248,36 @@ function drawArena(
     }
   }
 
-  // Корабль, уничтоженный именно этим выстрелом — для него отдельно
-  // проигрывается анимация взрыва, прежде чем он станет обломком.
+  // кого именно убили этим выстрелом — ему сначала крутим взрыв, а потом уже
+  // рисуем как обломок
   const justDestroyedId = (event && event.result === 'hit' && event.targetId && !event.aliveSnapshot[event.targetId])
     ? event.targetId
     : null;
 
-  // Корабли
+  // сами корабли
   for (const ship of ships) {
     const { cx, cy } = toCanvas(ship.x, ship.y);
-    // Размер корпуса на канвасе = реальный радиус корабля в том же масштабе,
-    // что и позиции. Тогда нарисованный корпус совпадает с зоной попадания,
-    // которую считает движок (perp ≤ radius) — «луч сквозь корпус» = попадание.
+    // размер на экране = реальный радиус в том же масштабе, что и позиции.
+    // тогда нарисованный корпус и есть зона попадания движка — луч сквозь
+    // корпус означает попадание, и наоборот.
     const R          = Math.max(ship.radius * scale, 10);
     const color      = COLOR_HEX[ship.color];
     const isShooter  = event?.shooterId === ship.id;
     const isTarget   = event?.targetId  === ship.id;
     const isExploding   = ship.id === justDestroyedId;
-    const explodeStart  = 0.8; // момент попадания луча — начало взрыва
+    const explodeStart  = 0.8; // луч долетел — тут и начинается взрыв
     const showAsAlive   = ship.alive || (isExploding && animPct < explodeStart);
 
     ctx.save();
     ctx.translate(cx, cy);
 
-    // Подсветка активного корабля
+    // подсвечиваем того, кто стреляет, и того, в кого стреляют
     if (isShooter || isTarget) {
       ctx.shadowBlur  = 28;
       ctx.shadowColor = color;
     }
 
-    // Корпус корабля — свой силуэт под каждый тип, с объёмным градиентом
+    // корпус: свой силуэт под тип + градиент для объёма
     const rad = (ship.angle * Math.PI) / 180;
     ctx.rotate(rad);
     ctx.globalAlpha = showAsAlive ? 1 : 0.35;
@@ -309,13 +303,13 @@ function drawArena(
 
     ctx.restore();
 
-    // Взрыв — рисуется поверх корпуса, без поворота корабля
+    // взрыв рисуем поверх, уже без поворота
     if (isExploding && animPct >= explodeStart) {
       const seed = (ship.id.charCodeAt(0) || 1) * 0.7;
       drawExplosion(ctx, cx, cy, R, seed, (animPct - explodeStart) / (1 - explodeStart));
     }
 
-    // HP бар
+    // полоска HP
     if (showAsAlive) {
       const barW = R * 2.2;
       const barH = 5;
@@ -327,14 +321,14 @@ function drawArena(
       ctx.fillRect(bx, by, barW * (ship.hp / ship.maxHp), barH);
     }
 
-    // Метка
+    // буква типа под кораблём
     ctx.fillStyle   = showAsAlive ? '#fff' : '#666';
     ctx.globalAlpha = showAsAlive ? 1 : 0.4;
     ctx.font        = 'bold 10px sans-serif';
     ctx.textAlign   = 'center';
-    ctx.fillText(ship.label[0], cx, cy + R + 22); // первая буква типа
+    ctx.fillText(ship.label[0], cx, cy + R + 22);
 
-    // Щиты — маленькие точки вокруг корабля
+    // щиты — точки по четырём бортам (голубая — цел, серая — сбит)
     if (showAsAlive) {
       const sideAngles = { front: ship.angle, rear: ship.angle + 180, left: ship.angle - 90, right: ship.angle + 90 };
       for (const [side, ang] of Object.entries(sideAngles)) {
@@ -367,17 +361,16 @@ export default function ArenaScreen() {
   const animRef    = useRef<number>(0);
   const playTimer  = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Стартуем бой при маунте
+  // при заходе на экран сразу считаем бой
   useEffect(() => {
     if (!isBattleReady) startBattle();
   }, []); // eslint-disable-line
 
-  // Текущий корабль для каждого события
+  // корабли на текущий ход — с HP и «живой/мёртв» из снимка события
   const currentShips = (() => {
     if (!battleShips.length) return [];
     if (currentEventIdx < 0) return battleShips;
 
-    // Применяем снимки состояния из события
     const ev = events[currentEventIdx];
     return battleShips.map(s => ({
       ...s,
@@ -386,7 +379,7 @@ export default function ArenaScreen() {
     }));
   })();
 
-  // Перерисовка
+  // перерисовываем канвас на каждый кадр/ход
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !battleShips.length) return;
@@ -394,10 +387,10 @@ export default function ArenaScreen() {
     drawArena(canvas, currentShips, ev, animPct);
   }, [currentShips, animPct, currentEventIdx]); // eslint-disable-line
 
-  // Анимация луча
+  // прокрутка анимации луча: гоним animPct от 0 к 1
   const runAnim = (onDone: () => void) => {
     const start = performance.now();
-    const dur   = 700; // ms
+    const dur   = 700; // мс
     const tick  = (now: number) => {
       const p = Math.min((now - start) / dur, 1);
       setAnimPct(p);
@@ -420,8 +413,8 @@ export default function ArenaScreen() {
     prevEvent();
   };
 
-  // Бой по умолчанию проигрывается сам по таймеру, но можно поставить на
-  // паузу и прокручивать ходы вручную кнопками ◀ / ▶.
+  // по умолчанию бой крутится сам по таймеру; на паузе ходы листаются
+  // вручную кнопками ◀ / ▶
   useEffect(() => {
     if (!isBattleReady || !isPlaying) return;
     let cancelled = false;
@@ -439,7 +432,7 @@ export default function ArenaScreen() {
     return () => { cancelled = true; clearTimeout(playTimer.current); };
   }, [isBattleReady, isPlaying]); // eslint-disable-line
 
-  // ── Текущее событие ──────────────────────────────────────────────────────
+  // ── что показываем про текущий ход ──────────────────────────────────────
   const ev = currentEventIdx >= 0 ? events[currentEventIdx] : null;
   const shooter  = ev ? battleShips.find(s => s.id === ev.shooterId) : null;
   const target   = ev?.targetId ? battleShips.find(s => s.id === ev.targetId) : null;
