@@ -211,10 +211,32 @@ export default function EditScreen() {
     if (selectedId === id) setSelected(null);
   };
 
+  // ── Правка выбранного корабля ────────────────────────────────────────────
+  const selectedShip = ships.find(sh => sh.id === selectedId) ?? null;
+  const displayAngle = selectedShip
+    ? Math.round(((selectedShip.angle % 360) + 360) % 360)
+    : 0;
+
+  const updateSelected = (patch: Partial<DetectedShip>) => {
+    if (!selectedId) return;
+    setLocalShips(prev => prev.map(sh => (sh.id === selectedId ? { ...sh, ...patch } : sh)));
+  };
+  const setAngle = (deg: number) => updateSelected({ angle: ((deg % 360) + 360) % 360 });
+  const rotateBy = (delta: number) => {
+    if (selectedShip) setAngle(selectedShip.angle + delta);
+  };
+
+  const DIRECTIONS = [
+    { deg: 270, label: '↑' },
+    { deg: 0,   label: '→' },
+    { deg: 90,  label: '↓' },
+    { deg: 180, label: '←' },
+  ];
+
   return (
     <div style={s.root}>
       <h2 style={s.title}>Расстановка кораблей</h2>
-      <p style={s.hint}>Перетащите корабль — позиция; перетащите белую ручку на конце стрелки — поворот</p>
+      <p style={s.hint}>Перетащите корабль — позиция; крутите ползунок или тяните белую ручку — поворот. Нажмите на корабль, чтобы открыть меню правки.</p>
 
       <div style={s.canvasWrap}>
         <canvas
@@ -225,6 +247,86 @@ export default function EditScreen() {
           onPointerUp={handlePointerUp}
         />
       </div>
+
+      {selectedShip && (
+        <div style={s.inspector}>
+          <div style={s.inspectorHead}>
+            <span style={{ color: COLOR_HEX[selectedShip.color], fontSize: 18 }}>■</span>
+            <span style={s.inspectorTitle}>{SHIP_STATS[selectedShip.type].label}</span>
+            <button
+              style={s.inspectorDel}
+              onClick={() => handleRemoveShip(selectedShip.id)}
+              title="Удалить корабль"
+            >
+              <TrashIcon size={16} />
+            </button>
+          </div>
+
+          {/* Угол поворота */}
+          <div style={s.row}>
+            <span style={s.rowLabel}>Угол</span>
+            <button style={s.rotBtn} onClick={() => rotateBy(-45)} title="−45°">⟲ 45</button>
+            <button style={s.rotBtn} onClick={() => rotateBy(-15)} title="−15°">−15</button>
+            <input
+              type="range" min={0} max={359} value={displayAngle}
+              onChange={e => setAngle(Number(e.target.value))}
+              style={s.slider}
+            />
+            <button style={s.rotBtn} onClick={() => rotateBy(15)} title="+15°">+15</button>
+            <button style={s.rotBtn} onClick={() => rotateBy(45)} title="+45°">45 ⟳</button>
+            <input
+              type="number" value={displayAngle}
+              onChange={e => { const v = Number(e.target.value); if (!Number.isNaN(v)) setAngle(v); }}
+              style={s.angleField}
+            />
+            <span style={s.deg}>°</span>
+          </div>
+
+          {/* Быстрые направления */}
+          <div style={s.row}>
+            <span style={s.rowLabel}>Направление</span>
+            {DIRECTIONS.map(d => (
+              <button
+                key={d.deg}
+                style={{ ...s.pill, ...(displayAngle === d.deg ? s.pillActive : {}) }}
+                onClick={() => setAngle(d.deg)}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Тип */}
+          <div style={s.row}>
+            <span style={s.rowLabel}>Тип</span>
+            {ALL_TYPES.map(t => (
+              <button
+                key={t}
+                style={{ ...s.pill, ...(selectedShip.type === t ? s.pillActive : {}) }}
+                onClick={() => updateSelected({ type: t })}
+              >
+                {SHIP_STATS[t].label}
+              </button>
+            ))}
+          </div>
+
+          {/* Цвет */}
+          <div style={s.row}>
+            <span style={s.rowLabel}>Цвет</span>
+            {ALL_COLORS.map(c => (
+              <button
+                key={c}
+                style={{
+                  ...s.colorDot, background: COLOR_HEX[c],
+                  outline: selectedShip.color === c ? '2px solid #fff' : 'none',
+                }}
+                onClick={() => updateSelected({ color: c })}
+                title={c}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={s.list}>
         {ships.map(ship => (
@@ -338,6 +440,29 @@ const s: Record<string, React.CSSProperties> = {
     background: '#15152a', borderRadius: 10, padding: 14,
     border: '1px solid #334', display: 'flex', flexDirection: 'column', gap: 10,
   },
+  inspector: {
+    marginTop: 12, width: '100%', maxWidth: 640,
+    background: '#15152a', borderRadius: 10, padding: 14,
+    border: '1px solid #334', display: 'flex', flexDirection: 'column', gap: 10,
+  },
+  inspectorHead: { display: 'flex', alignItems: 'center', gap: 8 },
+  inspectorTitle: { fontSize: 16, fontWeight: 700, flex: 1 },
+  inspectorDel: {
+    border: 'none', background: 'transparent', color: '#e66', cursor: 'pointer',
+    display: 'inline-flex', padding: 4,
+  },
+  row: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  rowLabel: { color: '#888', fontSize: 13, minWidth: 84 },
+  slider: { flex: 1, minWidth: 120, accentColor: '#6644ff' },
+  rotBtn: {
+    padding: '4px 9px', borderRadius: 6, border: '1px solid #445',
+    background: 'transparent', color: '#ccc', fontSize: 12, cursor: 'pointer',
+  },
+  angleField: {
+    width: 58, padding: '5px 6px', borderRadius: 6, border: '1px solid #445',
+    background: '#0d0d1a', color: '#fff', fontSize: 13,
+  },
+  deg: { color: '#888' },
   addRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   addLabel: { color: '#888', fontSize: 13, minWidth: 40 },
   pill: {
